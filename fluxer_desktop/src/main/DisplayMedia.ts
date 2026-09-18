@@ -7,6 +7,7 @@ import {
 	normalizeDesktopSourceTypes,
 	shouldHonorSelectedAudio,
 } from '@electron/main/DisplayMediaValidation';
+import {listNativeScreenCaptureSources} from '@electron/main/NativeScreenCapture';
 import {startWindowsScreenCaptureGuardForSource} from '@electron/main/WindowsScreenCaptureGuard';
 import {BrowserWindow, desktopCapturer, ipcMain, screen} from 'electron';
 import log from 'electron-log';
@@ -274,6 +275,39 @@ export function registerDisplayMediaRequestHandler(session: Electron.Session, we
 	});
 }
 
+interface DesktopSourceListItem {
+	id: string;
+	name: string;
+	thumbnailDataUrl?: string;
+	appIconDataUrl?: string;
+	display_id?: string;
+	nativeWidth?: number;
+	nativeHeight?: number;
+	isOwnWindow?: boolean;
+	isNativeOnly?: boolean;
+}
+
+async function mergeNativeOnlyWindowSources(mapped: Array<DesktopSourceListItem>): Promise<void> {
+	try {
+		const existingIds = new Set(mapped.map((source) => source.id));
+		const nativeSources = await listNativeScreenCaptureSources();
+		for (const nativeSource of nativeSources) {
+			if (nativeSource.kind !== 'window') continue;
+			if (existingIds.has(nativeSource.id)) continue;
+			mapped.push({
+				id: nativeSource.id,
+				name: nativeSource.name,
+				nativeWidth: nativeSource.width || undefined,
+				nativeHeight: nativeSource.height || undefined,
+				isOwnWindow: false,
+				isNativeOnly: true,
+			});
+		}
+	} catch (error) {
+		log.warn('[getDesktopSources] Failed to merge native-only window sources:', error);
+	}
+}
+
 export function registerDisplayMediaHandlers(): void {
 	if (displayMediaHandlersRegistered) return;
 	displayMediaHandlersRegistered = true;
@@ -294,18 +328,7 @@ export function registerDisplayMediaHandlers(): void {
 			types: unknown,
 			requestId?: unknown,
 			options?: unknown,
-		): Promise<
-			Array<{
-				id: string;
-				name: string;
-				thumbnailDataUrl?: string;
-				appIconDataUrl?: string;
-				display_id?: string;
-				nativeWidth?: number;
-				nativeHeight?: number;
-				isOwnWindow?: boolean;
-			}>
-		> => {
+		): Promise<Array<DesktopSourceListItem>> => {
 			const requestedTypes = normalizeDesktopSourceTypes(types);
 			const validRequestId = isValidDisplayMediaRequestId(requestId) ? requestId : null;
 			const listOnly = isListOnlyDesktopSourcesOption(options);
@@ -367,7 +390,7 @@ export function registerDisplayMediaHandlers(): void {
 					});
 				}
 				const ownWindowIds = collectOwnWindowMediaSourceIds();
-				const mapped = sources.map((source) => {
+				const mapped: Array<DesktopSourceListItem> = sources.map((source) => {
 					const native = source.display_id ? nativeDimensionsById.get(source.display_id) : undefined;
 					return {
 						id: source.id,
@@ -380,6 +403,9 @@ export function registerDisplayMediaHandlers(): void {
 						isOwnWindow: ownWindowIds.has(source.id),
 					};
 				});
+				if (process.platform === 'win32' && requestedTypes.includes('window')) {
+					await mergeNativeOnlyWindowSources(mapped);
+				}
 				mapped.sort((a, b) => {
 					if (a.isOwnWindow === b.isOwnWindow) return 0;
 					return a.isOwnWindow ? 1 : -1;

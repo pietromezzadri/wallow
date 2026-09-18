@@ -49,6 +49,14 @@ export interface DeviceScreenShareCaptureOptions {
 	playSound?: boolean;
 }
 
+export interface NativeWindowScreenShareCaptureOptions {
+	sourceId: string;
+	sourceKind: 'window' | 'game';
+	resolution?: ScreenShareCaptureOptions['resolution'];
+	sendUpdate?: boolean;
+	playSound?: boolean;
+}
+
 export interface CapturedScreenShareTracks {
 	videoTrack: MediaStreamTrack;
 	audioTrack?: MediaStreamTrack;

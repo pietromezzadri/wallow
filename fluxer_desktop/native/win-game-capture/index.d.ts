@@ -24,6 +24,15 @@ export interface ScreenCaptureOptions {
 	captureRect?: ScreenCaptureRect;
 	frameSinkHandle?: unknown;
 	nativeFrameSinkRequired?: boolean;
+	deliverFrames?: boolean;
+}
+
+export interface ScreenCaptureFrame {
+	width: number;
+	height: number;
+	stride: number;
+	timestampUs: number;
+	data: Buffer;
 }
 
 export interface ScreenCaptureStartResult {
@@ -103,18 +112,21 @@ export declare interface ScreenCapture {
 	on(event: 'closed', listener: () => void): this;
 	on(event: 'stalled', listener: (message?: string) => void): this;
 	on(event: 'diagnostic', listener: (message?: string) => void): this;
+	on(event: 'frame', listener: (frame: ScreenCaptureFrame) => void): this;
 	on(event: string | symbol, listener: (...args: Array<unknown>) => void): this;
 
 	off(event: 'error', listener: (err: Error) => void): this;
 	off(event: 'closed', listener: () => void): this;
 	off(event: 'stalled', listener: (message?: string) => void): this;
 	off(event: 'diagnostic', listener: (message?: string) => void): this;
+	off(event: 'frame', listener: (frame: ScreenCaptureFrame) => void): this;
 	off(event: string | symbol, listener: (...args: Array<unknown>) => void): this;
 
 	emit(event: 'error', err: Error): boolean;
 	emit(event: 'closed'): boolean;
 	emit(event: 'stalled', message?: string): boolean;
 	emit(event: 'diagnostic', message?: string): boolean;
+	emit(event: 'frame', frame: ScreenCaptureFrame): boolean;
 }
 
 export declare class ScreenCapture extends EventEmitter {

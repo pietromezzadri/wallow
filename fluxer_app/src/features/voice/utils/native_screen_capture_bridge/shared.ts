@@ -28,7 +28,7 @@ export interface RendererVideoFrame {
 }
 
 export interface VideoFrameCtor {
-	new (data: BufferSource, init: VideoFrameInit): RendererVideoFrame;
+	new (data: BufferSource | Uint8Array, init: VideoFrameInit): RendererVideoFrame;
 	new (data: CanvasImageSource, init: CanvasVideoFrameInit): RendererVideoFrame;
 }
 

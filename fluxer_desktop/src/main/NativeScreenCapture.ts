@@ -24,15 +24,25 @@ import {ipcMain} from 'electron';
 const logger = createChildLogger('NativeScreenCapture');
 const requireModule = createRequire(import.meta.url);
 
+interface NativeScreenCaptureFrame {
+	width: number;
+	height: number;
+	stride: number;
+	timestampUs: number;
+	data: Buffer;
+}
+
 interface NativeScreenCaptureInstance {
 	on(event: 'error', listener: (error: Error) => void): this;
 	on(event: 'closed', listener: () => void): this;
 	on(event: 'stalled', listener: (message?: string) => void): this;
 	on(event: 'diagnostic', listener: (message?: string) => void): this;
+	on(event: 'frame', listener: (frame: NativeScreenCaptureFrame) => void): this;
 	removeListener(event: 'error', listener: (error: Error) => void): this;
 	removeListener(event: 'closed', listener: () => void): this;
 	removeListener(event: 'stalled', listener: (message?: string) => void): this;
 	removeListener(event: 'diagnostic', listener: (message?: string) => void): this;
+	removeListener(event: 'frame', listener: (frame: NativeScreenCaptureFrame) => void): this;
 	setLifecycleCallback?(callback: (kind: string, message: string) => void): void;
 	start(): Promise<
 		| {
@@ -132,6 +142,7 @@ interface ActiveNativeScreenSession {
 	onClosed: () => void;
 	onStalled?: (message?: string) => void;
 	onDiagnostic?: (message?: string) => void;
+	onFrame?: (frame: NativeScreenCaptureFrame) => void;
 	onSenderDestroyed: () => void;
 	finalized: boolean;
 	windowsHagsState?: WindowsHagsState;
@@ -541,7 +552,7 @@ async function getWindowsNativeScreenCaptureAvailability(
 	}
 }
 
-async function listNativeScreenCaptureSources(): Promise<Array<NativeScreenCaptureSource>> {
+export async function listNativeScreenCaptureSources(): Promise<Array<NativeScreenCaptureSource>> {
 	const loadResult = loadNativeScreenCaptureAddon();
 	if (!loadResult.availability.available || !loadResult.addon) return [];
 	if (loadResult.platform === 'win32') {
@@ -621,6 +632,7 @@ function removeSessionListeners(session: ActiveNativeScreenSession): void {
 	session.capture.removeListener('closed', session.onClosed);
 	if (session.onStalled) session.capture.removeListener('stalled', session.onStalled);
 	if (session.onDiagnostic) session.capture.removeListener('diagnostic', session.onDiagnostic);
+	if (session.onFrame) session.capture.removeListener('frame', session.onFrame);
 	session.sender.removeListener('destroyed', session.onSenderDestroyed);
 }
 
@@ -822,6 +834,7 @@ async function startNativeScreenCapture(
 	if (activeSessions.has(captureId)) {
 		throw new Error('Native screen capture id is already active');
 	}
+	const deliverFrames = options.deliverFrames === true;
 	const capture = new loadResult.addon.ScreenCapture({
 		sourceId: options.sourceId,
 		sourceKind: options.sourceKind,
@@ -833,7 +846,8 @@ async function startNativeScreenCapture(
 		colorSpace: options.colorSpace,
 		showCursorClicks: options.showCursorClicks === true,
 		captureRect: options.captureRect,
-		nativeFrameSinkRequired: true,
+		nativeFrameSinkRequired: deliverFrames ? undefined : true,
+		deliverFrames: deliverFrames ? true : undefined,
 	});
 	const session: ActiveNativeScreenSession = {
 		captureId,
@@ -879,10 +893,29 @@ async function startNativeScreenCapture(
 			detail: diagnosticMessage,
 		});
 	};
+	if (deliverFrames) {
+		session.onFrame = (frame) => {
+			if (session.finalized) return;
+			if (session.sender.isDestroyed()) return;
+			try {
+				session.sender.send('native-screen-capture:frame', {
+					captureId,
+					width: frame.width,
+					height: frame.height,
+					stride: frame.stride,
+					timestampUs: frame.timestampUs,
+					data: frame.data,
+				});
+			} catch (error) {
+				logger.warn('Failed to forward native screen capture frame to renderer', {captureId, error});
+			}
+		};
+	}
 	capture.on('error', session.onError);
 	capture.on('closed', session.onClosed);
 	if (session.onStalled) capture.on('stalled', session.onStalled);
 	if (session.onDiagnostic) capture.on('diagnostic', session.onDiagnostic);
+	if (session.onFrame) capture.on('frame', session.onFrame);
 	if (typeof capture.setLifecycleCallback === 'function') {
 		try {
 			capture.setLifecycleCallback((kind, message) => sendLifecycleEvent(session, kind, message, 'delegate'));

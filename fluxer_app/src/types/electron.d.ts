@@ -13,6 +13,7 @@ export interface DesktopSource {
 	nativeWidth?: number;
 	nativeHeight?: number;
 	isOwnWindow?: boolean;
+	isNativeOnly?: boolean;
 }
 
 export interface DesktopInfo {
@@ -714,7 +715,17 @@ export interface NativeScreenCaptureStartOptions {
 	colorSpace?: 'rec709' | 'srgb';
 	showCursorClicks?: boolean;
 	captureRect?: NativeScreenCaptureRect;
-	nativeFrameSinkRequired: true;
+	nativeFrameSinkRequired?: true;
+	deliverFrames?: true;
+}
+
+export interface NativeScreenCaptureFrameMessage {
+	captureId: string;
+	width: number;
+	height: number;
+	stride: number;
+	timestampUs: number;
+	data: Uint8Array;
 }
 
 export interface NativeScreenCaptureStartResult {
@@ -795,4 +806,5 @@ export interface NativeScreenCaptureApi {
 	stop(captureId: string): Promise<void>;
 	onEnd(callback: (message: NativeScreenCaptureEndMessage) => void): () => void;
 	onLifecycleEvent(callback: (message: NativeScreenCaptureLifecycleMessage) => void): () => void;
+	onFrame(callback: (message: NativeScreenCaptureFrameMessage) => void): () => void;
 }

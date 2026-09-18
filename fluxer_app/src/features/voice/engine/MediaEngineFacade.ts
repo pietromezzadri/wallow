@@ -129,6 +129,7 @@ import VoiceEngineV2AppRemoteSpeakingAdapter from '@app/features/voice/engine/v2
 import type {VoiceEngineV2AppScreenShareControllerGateway} from '@app/features/voice/engine/v2/VoiceEngineV2AppScreenShareControllerRouting';
 import voiceEngineV2AppScreenShareExecutionAdapter, {
 	type DeviceScreenShareCaptureOptions,
+	type NativeWindowScreenShareCaptureOptions,
 	type ScreenShareReconnectSnapshot,
 } from '@app/features/voice/engine/v2/VoiceEngineV2AppScreenShareExecutionAdapter';
 import {selectVoiceEngineV2AppIntentSelfMuteForVoiceStatePayload} from '@app/features/voice/engine/v2/VoiceEngineV2AppSelectors';
@@ -2121,6 +2122,13 @@ class MediaEngineFacade extends Store {
 		publishOptions?: TrackPublishOptions,
 	): Promise<void> {
 		await voiceEngineV2AppScreenShareExecutionAdapter.startDeviceScreenShare(this.room, options, publishOptions);
+	}
+
+	async startNativeWindowScreenShare(
+		options: NativeWindowScreenShareCaptureOptions,
+		publishOptions?: TrackPublishOptions,
+	): Promise<void> {
+		await voiceEngineV2AppScreenShareExecutionAdapter.startNativeWindowScreenShare(this.room, options, publishOptions);
 	}
 
 	private createScreenShareControllerGateway(): VoiceEngineV2AppScreenShareControllerGateway {

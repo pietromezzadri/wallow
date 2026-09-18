@@ -39,6 +39,7 @@ import {
 	type DisplayScreenShareCaptureContext,
 	getReplacementScreenShareSettingsOptions,
 	logger,
+	type NativeWindowScreenShareCaptureOptions,
 	type ScreenShareCaptureCleanupSnapshot,
 	type SimulcastTrackInfoLike,
 	stopMediaTrack,
@@ -66,15 +67,17 @@ import {
 	createLocalAudioTrack,
 	createLocalVideoTrack,
 	LocalAudioTrack,
+	LocalVideoTrack,
 	type LocalParticipant,
 	type LocalTrackPublication,
-	type LocalVideoTrack,
 	type Room,
+	RoomEvent,
 	type ScreenShareCaptureOptions,
 	Track,
 	type TrackPublishOptions,
 	type VideoCodec,
 } from 'livekit-client';
+import {createNativeWindowScreenShareBridge} from '@app/features/voice/utils/native_screen_capture_bridge/createNativeWindowScreenBridge';
 
 function isUserCancelledScreenShareError(error: unknown): boolean {
 	if (!(error instanceof Error)) return false;
@@ -620,6 +623,166 @@ export class VoiceEngineV2AppScreenShareLiveKitFlows {
 				applyState,
 				createdTracks,
 				publishedTracks,
+				error,
+			);
+		}
+		await this.adapter.applyPendingScreenShareRequestsInternal(room, participant);
+	}
+
+	private armNativeWindowShareUnpublishCleanup(
+		room: Room | null,
+		rawTrack: MediaStreamTrack,
+		cleanup: () => Promise<void>,
+	): void {
+		if (!room) return;
+		const handleUnpublished = (publication: LocalTrackPublication): void => {
+			if (publication.track?.mediaStreamTrack !== rawTrack) return;
+			if (rawTrack.readyState !== 'ended') return;
+			room.off(RoomEvent.LocalTrackUnpublished, handleUnpublished);
+			void cleanup().catch((error) => {
+				logger.warn('Failed to clean up native window screen share after unpublish', {error});
+			});
+		};
+		room.on(RoomEvent.LocalTrackUnpublished, handleUnpublished);
+	}
+
+	private async finalizeNativeWindowShareSuccess(
+		room: Room | null,
+		participant: LocalParticipant,
+		effectivePublishOptions: TrackPublishOptions | undefined,
+		applyState: (value: boolean) => void,
+		playSound: boolean,
+	): Promise<void> {
+		assert.ok(participant);
+		await runScreenShareActivationRitual({
+			adapter: this.adapter,
+			room,
+			participant,
+			active: true,
+			steps: {
+				acquireStreamingPriority: true,
+				enforcePublicationCap: false,
+				applyState,
+				applyStatePosition: 'before-pipeline',
+				publishPipeline: {contentSource: 'app', effectivePublishOptions},
+				deactivateCleanup: null,
+				updateLocalParticipant: true,
+				audioSync: {kind: 'participant-after-watch'},
+				syncPersistedAudioPreferenceWhenActive: false,
+				playSound,
+				buildResolveTransition: () => ({
+					type: 'share.resolve',
+					active: true,
+					sourceType: 'display',
+					encoderVerificationScheduled: this.adapter.encoderVerificationTimer != null,
+					streamingPriorityHeld: this.adapter.streamingPriorityHeld,
+				}),
+			},
+		});
+		logger.info('Started native window screen share');
+	}
+
+	private async handleNativeWindowShareFailure(
+		room: Room | null,
+		participant: LocalParticipant,
+		applyState: (value: boolean) => void,
+		createdTracks: Array<LocalVideoTrack>,
+		publishedTracks: Array<LocalVideoTrack>,
+		bridgeCleanup: (() => Promise<void>) | null,
+		error: unknown,
+	): Promise<void> {
+		assert.ok(participant);
+		if (publishedTracks.length > 0) {
+			await Promise.allSettled(publishedTracks.map((track) => participant.unpublishTrack(track)));
+		} else if (bridgeCleanup) {
+			await bridgeCleanup().catch(() => undefined);
+		}
+		createdTracks.forEach((track) => {
+			if (!publishedTracks.includes(track)) track.stop();
+		});
+		const cancelled = isUserCancelledOrPermissionDeniedError(error);
+		settleScreenShareFailure({
+			adapter: this.adapter,
+			room,
+			participant,
+			actual: participant.isScreenShareEnabled,
+			applyState,
+			onInactiveAfterSync: null,
+			monitorEndOnActive: false,
+			playSound: false,
+			buildTransition: (actualNow) =>
+				buildScreenShareFailureTransition({
+					cancelled,
+					active: actualNow,
+					sourceType: actualNow ? this.adapter.getActiveScreenShareSourceTypeInternal() : null,
+				}),
+		});
+		if (!cancelled) {
+			logger.error('Failed to start native window screen share', {error});
+		}
+	}
+
+	async startNativeWindowScreenShare(
+		room: Room | null,
+		options: NativeWindowScreenShareCaptureOptions,
+		publishOptions?: TrackPublishOptions,
+	): Promise<void> {
+		if (guardScreenShareEntry({platformUnsupportedWarning: SCREEN_SHARE_UNSUPPORTED_PLATFORM_WARNING}) !== 'proceed') {
+			return;
+		}
+		const {sendUpdate = true, playSound = true, sourceId, sourceKind, resolution} = options;
+		const participant = room?.localParticipant;
+		if (!participant) {
+			logger.warn('No participant');
+			return;
+		}
+		const pendingVerdict = guardScreenShareEntry({
+			pending: {
+				active: this.adapter.isScreenSharePending,
+				debugMessage: 'Already pending, ignoring native window share request',
+			},
+		});
+		if (pendingVerdict === 'share-pending') {
+			return;
+		}
+		if (getLocalScreenSharePublications(participant).length > 0) {
+			await this.setEnabled(room, false, {sendUpdate: false, playSound: false});
+		}
+		const applyState = (value: boolean) => {
+			applyScreenShareState(this.adapter, value, sendUpdate, sendUpdate);
+		};
+		this.adapter.transitionScreenShareLifecycleInternal({type: 'share.start', sourceType: 'display'});
+		const createdTracks: Array<LocalVideoTrack> = [];
+		const publishedTracks: Array<LocalVideoTrack> = [];
+		let bridgeCleanup: (() => Promise<void>) | null = null;
+		try {
+			const requestedPublishOptions = await this.adapter.getEffectivePublishOptionsInternal(true, publishOptions);
+			const bridge = await createNativeWindowScreenShareBridge(sourceId, sourceKind, {
+				width: resolution?.width,
+				height: resolution?.height,
+				frameRate: resolution?.frameRate,
+			});
+			bridgeCleanup = bridge.cleanup;
+			const videoTrack = new LocalVideoTrack(bridge.track, undefined, true);
+			createdTracks.push(videoTrack);
+			await participant.publishTrack(videoTrack, {
+				...requestedPublishOptions,
+				source: Track.Source.ScreenShare,
+				stream: VoiceTrackSource.ScreenShare,
+			});
+			publishedTracks.push(videoTrack);
+			this.armNativeWindowShareUnpublishCleanup(room, bridge.track, bridge.cleanup);
+			await enforceLocalMediaPublicationCap(participant, VoiceTrackSource.ScreenShare);
+			const enforced = await this.enforcePublishCodecPolicy(participant, requestedPublishOptions);
+			await this.finalizeNativeWindowShareSuccess(room, participant, enforced.effectivePublishOptions, applyState, playSound);
+		} catch (error) {
+			await this.handleNativeWindowShareFailure(
+				room,
+				participant,
+				applyState,
+				createdTracks,
+				publishedTracks,
+				bridgeCleanup,
 				error,
 			);
 		}

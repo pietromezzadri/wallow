@@ -58,7 +58,7 @@ import {
 } from '@app/features/voice/utils/StreamSettingsUpdatePolicy';
 import {hasHigherVideoQuality} from '@app/features/voice/utils/VideoQualityEntitlement';
 import type {NativeAudioStartOptions, VirtmicNode} from '@app/types/electron.d';
-import type {ScreenShareCaptureOptions, VideoCodec} from 'livekit-client';
+import type {ScreenShareCaptureOptions, TrackPublishOptions, VideoCodec} from 'livekit-client';
 
 const logger = new Logger('ScreenShareStartFlow');
 
@@ -403,7 +403,41 @@ export interface ConfiguredDisplayScreenShareOptions {
 	};
 	preferredDisplaySurface?: 'window' | 'monitor';
 	isOwnWindow?: boolean;
+	isNativeOnly?: boolean;
 	includeAudio?: boolean;
+}
+
+async function runNativeWindowScreenShare(
+	sourceId: string,
+	captureOptions: ScreenShareCaptureOptions,
+	publishOptions: TrackPublishOptions,
+	mode: 'start' | 'switch',
+): Promise<boolean> {
+	if (mode === 'switch' && !didScreenShareStart()) {
+		logger.warn('No active screen share to switch for a native window source');
+		return false;
+	}
+	if (didScreenShareStart()) {
+		await MediaEngine.setScreenShareEnabled(false, {
+			sendUpdate: false,
+			playSound: false,
+			preserveStreamAudioPreferences: true,
+		});
+	}
+	try {
+		await MediaEngine.startNativeWindowScreenShare(
+			{sourceId, sourceKind: 'window', resolution: captureOptions.resolution},
+			publishOptions,
+		);
+	} catch (error) {
+		logger.warn('Failed to start native window screen share', {error, sourceId});
+		return false;
+	}
+	const captured = didScreenShareStart();
+	if (captured) {
+		ActiveScreenShareSource.setPublishedSource('app', sourceId, {isNativeOnly: true});
+	}
+	return captured;
 }
 
 async function runConfiguredDisplayScreenShare(
@@ -428,6 +462,21 @@ async function runConfiguredDisplayScreenShare(
 		options?.includeAudio,
 	);
 	if (electronApi) {
+		if (options?.isNativeOnly === true) {
+			if (!sourceId) {
+				logger.warn('No desktop source selected for native window share');
+				return false;
+			}
+			return runNativeWindowScreenShare(sourceId, captureOptions, publishOptions, mode);
+		}
+		if (mode === 'switch' && ActiveScreenShareSource.isNativeOnly()) {
+			await MediaEngine.setScreenShareEnabled(false, {
+				sendUpdate: false,
+				playSound: false,
+				preserveStreamAudioPreferences: true,
+			});
+			mode = 'start';
+		}
 		const restartWaylandPortalForSwitch = useWaylandPortal && mode === 'switch';
 		if (!useWaylandPortal && !sourceId) {
 			logger.warn('No desktop source selected for display share');

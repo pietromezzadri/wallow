@@ -106,7 +106,9 @@ export function isValidStartOptions(options: unknown): options is NativeScreenCa
 	if (options.captureRect !== undefined && !isValidCaptureRect(options.captureRect)) {
 		return false;
 	}
-	if (options.nativeFrameSinkRequired !== true) {
+	const wantsNativeFrameSink = options.nativeFrameSinkRequired === true;
+	const wantsFrameDelivery = options.deliverFrames === true;
+	if (wantsNativeFrameSink === wantsFrameDelivery) {
 		return false;
 	}
 	return true;

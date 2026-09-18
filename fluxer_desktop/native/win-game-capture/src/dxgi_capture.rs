@@ -7,8 +7,9 @@ use windows::{
         Graphics::{
             Direct3D::D3D_DRIVER_TYPE_UNKNOWN,
             Direct3D11::{
-                D3D11_BOX, D3D11_CREATE_DEVICE_BGRA_SUPPORT, D3D11_RESOURCE_MISC_SHARED,
-                D3D11_SDK_VERSION, D3D11_TEXTURE2D_DESC, D3D11_USAGE_DEFAULT, D3D11CreateDevice,
+                D3D11_BOX, D3D11_CPU_ACCESS_READ, D3D11_CREATE_DEVICE_BGRA_SUPPORT, D3D11_MAP_READ,
+                D3D11_MAPPED_SUBRESOURCE, D3D11_RESOURCE_MISC_SHARED, D3D11_SDK_VERSION,
+                D3D11_TEXTURE2D_DESC, D3D11_USAGE_DEFAULT, D3D11_USAGE_STAGING, D3D11CreateDevice,
                 ID3D11Device, ID3D11DeviceContext, ID3D11Resource, ID3D11Texture2D,
             },
             Dxgi::{
@@ -33,8 +34,8 @@ use windows::{
 
 #[cfg(target_os = "windows")]
 use crate::{
-    CaptureInner, emit_lifecycle, emit_shared_texture_frame, note_media_frame_without_sink,
-    resolve_frame_sink,
+    CaptureInner, emit_frame_buffer, emit_lifecycle, emit_shared_texture_frame, has_frame_callback,
+    note_media_frame_without_sink, resolve_frame_sink,
 };
 
 #[cfg(target_os = "windows")]
@@ -113,6 +114,7 @@ struct DuplicationState {
     monitor: HMONITOR,
     monitor_rect: RECT,
     shared_output: Option<SharedTextureOutput>,
+    cpu_readback: Option<ID3D11Texture2D>,
     cap_w: u32,
     cap_h: u32,
     out_w: u32,
@@ -373,6 +375,38 @@ fn create_shared_output_slot(
 }
 
 #[cfg(target_os = "windows")]
+fn create_cpu_readback_texture(
+    device: &ID3D11Device,
+    width: u32,
+    height: u32,
+) -> Result<ID3D11Texture2D, String> {
+    assert!(width > 0, "CPU readback texture width positive");
+    assert!(height > 0, "CPU readback texture height positive");
+    let desc = D3D11_TEXTURE2D_DESC {
+        Width: width,
+        Height: height,
+        MipLevels: 1,
+        ArraySize: 1,
+        Format: DXGI_FORMAT_B8G8R8A8_UNORM,
+        SampleDesc: DXGI_SAMPLE_DESC {
+            Count: 1,
+            Quality: 0,
+        },
+        Usage: D3D11_USAGE_STAGING,
+        BindFlags: Default::default(),
+        CPUAccessFlags: D3D11_CPU_ACCESS_READ.0 as u32,
+        MiscFlags: 0,
+    };
+    let mut texture = None;
+    unsafe {
+        device
+            .CreateTexture2D(&desc, None, Some(&mut texture))
+            .map_err(|e| format!("CreateTexture2D CPU readback: {e}"))?;
+    }
+    texture.ok_or_else(|| "D3D11 CPU readback texture was None".to_string())
+}
+
+#[cfg(target_os = "windows")]
 pub(crate) fn resolve_output_size(
     src_width: u32,
     src_height: u32,
@@ -499,6 +533,7 @@ pub fn capture_loop(inner: &Arc<CaptureInner>, frame_interval: std::time::Durati
                 state.out_w = out_w;
                 state.out_h = out_h;
                 state.shared_output = create_shared_output_texture(&device, width, height).ok();
+                state.cpu_readback = create_cpu_readback_texture(&device, width, height).ok();
             }
             FrameResult::AccessLost => {
                 duplication_state = None;
@@ -564,12 +599,14 @@ fn setup_duplication(
     let (out_w, out_h) = resolve_output_size(cap_w, cap_h, requested_width, requested_height);
 
     let shared_output = create_shared_output_texture(device, cap_w, cap_h).ok();
+    let cpu_readback = create_cpu_readback_texture(device, cap_w, cap_h).ok();
 
     Ok(DuplicationState {
         duplication,
         monitor,
         monitor_rect,
         shared_output,
+        cpu_readback,
         cap_w,
         cap_h,
         out_w,
@@ -697,6 +734,16 @@ fn emit_acquired_frame(
 ) -> FrameResult {
     assert!(src_box.right > src_box.left, "source box width positive");
     assert!(src_box.bottom > src_box.top, "source box height positive");
+    if has_frame_callback(inner) {
+        return emit_cpu_frame(
+            inner,
+            context,
+            state,
+            desktop_resource,
+            src_box,
+            capture_start,
+        );
+    }
     let Some(frame_sink) = resolve_frame_sink(inner, capture_id) else {
         note_media_frame_without_sink(
             inner,
@@ -741,6 +788,73 @@ fn emit_acquired_frame(
         shared_output.height,
         shared_output.dxgi_format,
         capture_timestamp_us(capture_start),
+    );
+    FrameResult::Ok
+}
+
+#[cfg(target_os = "windows")]
+fn emit_cpu_frame(
+    inner: &Arc<CaptureInner>,
+    context: &ID3D11DeviceContext,
+    state: &mut DuplicationState,
+    desktop_resource: &ID3D11Resource,
+    src_box: &D3D11_BOX,
+    capture_start: std::time::Instant,
+) -> FrameResult {
+    if state.out_w != state.cap_w || state.out_h != state.cap_h {
+        return FrameResult::Error(
+            "DXGI CPU readback does not support scaling; requested output size must match capture size".into(),
+        );
+    }
+    let Some(cpu_readback) = state.cpu_readback.as_ref() else {
+        return FrameResult::Error("DXGI CPU readback texture unavailable".into());
+    };
+    let staging_resource: ID3D11Resource = match cpu_readback.cast() {
+        Ok(resource) => resource,
+        Err(e) => {
+            return FrameResult::Error(format!("ID3D11Resource CPU readback cast: {e}"));
+        }
+    };
+    unsafe {
+        context.CopySubresourceRegion(
+            &staging_resource,
+            0,
+            0,
+            0,
+            0,
+            desktop_resource,
+            0,
+            Some(src_box),
+        );
+    }
+    let width = state.cap_w;
+    let height = state.cap_h;
+    let tight_stride = (width as usize) * 4;
+    let mut mapped = D3D11_MAPPED_SUBRESOURCE::default();
+    let data = unsafe {
+        if let Err(e) = context.Map(&staging_resource, 0, D3D11_MAP_READ, 0, Some(&mut mapped)) {
+            return FrameResult::Error(format!("D3D11 Map CPU readback texture: {e}"));
+        }
+        let row_pitch = mapped.RowPitch as usize;
+        let mut data = vec![0u8; tight_stride * height as usize];
+        let src = mapped.pData as *const u8;
+        for row in 0..height as usize {
+            std::ptr::copy_nonoverlapping(
+                src.add(row * row_pitch),
+                data.as_mut_ptr().add(row * tight_stride),
+                tight_stride,
+            );
+        }
+        context.Unmap(&staging_resource, 0);
+        data
+    };
+    emit_frame_buffer(
+        inner,
+        width,
+        height,
+        tight_stride as u32,
+        capture_timestamp_us(capture_start) as f64,
+        data,
     );
     FrameResult::Ok
 }

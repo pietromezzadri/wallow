@@ -34,6 +34,7 @@ import type {
 	NativeScreenCaptureAvailability,
 	NativeScreenCaptureDiagnostics,
 	NativeScreenCaptureEndMessage,
+	NativeScreenCaptureFrameMessage,
 	NativeScreenCaptureLifecycleEventKind,
 	NativeScreenCaptureLifecycleMessage,
 	NativeScreenCaptureLifecycleSource,
@@ -130,6 +131,31 @@ function validateNativeScreenCaptureLifecycleMessage(value: unknown): NativeScre
 	return source === undefined
 		? {captureId, kind: kind as NativeScreenCaptureLifecycleEventKind, message}
 		: {captureId, kind: kind as NativeScreenCaptureLifecycleEventKind, message, source};
+}
+
+const NATIVE_SCREEN_CAPTURE_FRAME_MAX_CAPTURE_ID_LENGTH = 256;
+const NATIVE_SCREEN_CAPTURE_FRAME_MAX_DIMENSION = 8192;
+
+function isValidNativeScreenCaptureFrameDimension(value: unknown): value is number {
+	return typeof value === 'number' && Number.isSafeInteger(value) && value > 0 && value <= NATIVE_SCREEN_CAPTURE_FRAME_MAX_DIMENSION;
+}
+
+function validateNativeScreenCaptureFrameMessage(value: unknown): NativeScreenCaptureFrameMessage | null {
+	if (!isRecord(value)) return null;
+	const captureId = value['captureId'];
+	if (typeof captureId !== 'string') return null;
+	if (captureId.length === 0 || captureId.length > NATIVE_SCREEN_CAPTURE_FRAME_MAX_CAPTURE_ID_LENGTH) return null;
+	const width = value['width'];
+	const height = value['height'];
+	const stride = value['stride'];
+	if (!isValidNativeScreenCaptureFrameDimension(width)) return null;
+	if (!isValidNativeScreenCaptureFrameDimension(height)) return null;
+	if (typeof stride !== 'number' || !Number.isSafeInteger(stride) || stride < width * 4) return null;
+	const timestampUs = value['timestampUs'];
+	if (typeof timestampUs !== 'number' || !Number.isFinite(timestampUs)) return null;
+	const data = value['data'];
+	if (!(data instanceof Uint8Array) || data.length < stride * height) return null;
+	return {captureId, width, height, stride, timestampUs, data};
 }
 
 function clampZoomLevel(level: number): number {
@@ -729,6 +755,15 @@ const api: ElectronAPI = {
 			};
 			ipcRenderer.on('native-screen-capture:lifecycle', handler);
 			return () => ipcRenderer.removeListener('native-screen-capture:lifecycle', handler);
+		},
+		onFrame: (callback: (message: NativeScreenCaptureFrameMessage) => void): (() => void) => {
+			const handler = (_event: Electron.IpcRendererEvent, message: unknown): void => {
+				const validated = validateNativeScreenCaptureFrameMessage(message);
+				if (!validated) return;
+				callback(validated);
+			};
+			ipcRenderer.on('native-screen-capture:frame', handler);
+			return () => ipcRenderer.removeListener('native-screen-capture:frame', handler);
 		},
 	},
 	voiceEngine: {

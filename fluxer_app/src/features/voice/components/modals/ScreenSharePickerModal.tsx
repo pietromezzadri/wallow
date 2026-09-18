@@ -1310,6 +1310,7 @@ const ScreenSharePickerModalLoadedContent = observer(
 						const preferredDisplaySurface: 'window' | 'monitor' | undefined =
 							activeTab === 'apps' ? 'window' : activeTab === 'displays' ? 'monitor' : undefined;
 						const isOwnWindow = selectedSource?.isOwnWindow === true;
+						const isNativeOnly = selectedSource?.isNativeOnly === true;
 						let includeAudio: boolean | undefined;
 						if (platform === 'win32' || platform === 'darwin' || platform === 'linux') {
 							const captureScope = activeTab === 'apps' ? 'process' : 'system';
@@ -1324,12 +1325,14 @@ const ScreenSharePickerModalLoadedContent = observer(
 										sourceDimensions,
 										preferredDisplaySurface,
 										isOwnWindow,
+										isNativeOnly,
 										includeAudio,
 									})
 								: await startConfiguredDisplayScreenShare(selectedDisplaySourceId, {
 										sourceDimensions,
 										preferredDisplaySurface,
 										isOwnWindow,
+										isNativeOnly,
 										includeAudio,
 									});
 					}

@@ -77,6 +77,7 @@ class ScreenCapture extends EventEmitter {
 		this.captureRect = options.captureRect;
 		this.frameSinkHandle = options.frameSinkHandle;
 		this.nativeFrameSinkRequired = options.nativeFrameSinkRequired === true;
+		this.deliverFrames = options.deliverFrames === true;
 		this.started = false;
 		this.stopped = false;
 		this.closedEmitted = false;
@@ -112,6 +113,18 @@ class ScreenCapture extends EventEmitter {
 				this._emitClosedOnce();
 			}
 		});
+
+		if (this.deliverFrames) {
+			if (typeof this.native.setFrameCallback !== 'function') {
+				throw new Error(`${MODULE_NAME} native binding does not support JS frame delivery`);
+			}
+			this.native.setFrameCallback((...frameArgs) => {
+				const [width, height, stride, timestampUs, data] =
+					frameArgs.length === 1 && Array.isArray(frameArgs[0]) ? frameArgs[0] : frameArgs;
+				if (this.stopped) return;
+				this.emit('frame', {width, height, stride, timestampUs, data});
+			});
+		}
 	}
 
 	async start() {

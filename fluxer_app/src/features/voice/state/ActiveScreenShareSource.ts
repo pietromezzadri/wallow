@@ -8,6 +8,7 @@ import {makeAutoObservable} from 'mobx';
 
 export interface ActiveScreenShareSourceOptions {
 	readonly isOwnWindow?: boolean;
+	readonly isNativeOnly?: boolean;
 }
 
 export type PublishedScreenShareSource = 'web' | 'wayland' | 'device' | 'app' | 'display';
@@ -15,6 +16,7 @@ export type PublishedScreenShareSource = 'web' | 'wayland' | 'device' | 'app' | 
 class ActiveScreenShareSource {
 	sourceId: string | null = null;
 	ownWindow = false;
+	nativeOnly = false;
 	publishedSource: PublishedScreenShareSource | null = null;
 	windowAudioScope: WindowShareAudioScope = 'window';
 	pendingWindowAudioScope: WindowShareAudioScope | null = null;
@@ -31,6 +33,7 @@ class ActiveScreenShareSource {
 		this.publishedSource = publishedSource;
 		this.sourceId = sourceId;
 		this.ownWindow = sourceId !== null && options.isOwnWindow === true;
+		this.nativeOnly = sourceId !== null && options.isNativeOnly === true;
 	}
 
 	getSourceId(): string | null {
@@ -39,6 +42,10 @@ class ActiveScreenShareSource {
 
 	isOwnWindow(): boolean {
 		return this.ownWindow;
+	}
+
+	isNativeOnly(): boolean {
+		return this.nativeOnly;
 	}
 
 	getPublishedSource(): PublishedScreenShareSource | null {
@@ -75,6 +82,7 @@ class ActiveScreenShareSource {
 	clear(): void {
 		this.sourceId = null;
 		this.ownWindow = false;
+		this.nativeOnly = false;
 		this.publishedSource = null;
 		this.windowAudioScope = 'window';
 		this.pendingWindowAudioScope = null;

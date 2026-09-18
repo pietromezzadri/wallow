@@ -51,6 +51,7 @@ import {
 	type DisplayScreenShareCaptureContext,
 	logger,
 	mergeScreenShareCaptureCleanupSnapshots,
+	type NativeWindowScreenShareCaptureOptions,
 	releaseScreenShareCaptureCleanup,
 	getEffectivePublishOptions as resolveEffectivePublishOptions,
 	type ScreenShareCaptureCleanupSnapshot,
@@ -106,7 +107,10 @@ import {
 	type VideoCodec,
 } from 'livekit-client';
 
-export type {DeviceScreenShareCaptureOptions} from '@app/features/voice/engine/voice_screen_share_manager/shared';
+export type {
+	DeviceScreenShareCaptureOptions,
+	NativeWindowScreenShareCaptureOptions,
+} from '@app/features/voice/engine/voice_screen_share_manager/shared';
 
 const SCREEN_SHARE_ENDED_MODAL_KEY = 'voice-screen-share-ended';
 
@@ -940,6 +944,20 @@ class VoiceEngineV2AppScreenShareExecutionAdapter extends Store {
 		recordScreenShareStarted();
 		try {
 			await this.liveKitFlows.startDeviceScreenShare(room, options, publishOptions);
+		} catch (error) {
+			recordScreenShareStartError(error);
+			throw error;
+		}
+	}
+
+	async startNativeWindowScreenShare(
+		room: Room | null,
+		options: NativeWindowScreenShareCaptureOptions,
+		publishOptions?: TrackPublishOptions,
+	): Promise<void> {
+		recordScreenShareStarted();
+		try {
+			await this.liveKitFlows.startNativeWindowScreenShare(room, options, publishOptions);
 		} catch (error) {
 			recordScreenShareStartError(error);
 			throw error;

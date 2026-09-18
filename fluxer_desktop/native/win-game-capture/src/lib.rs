@@ -44,6 +44,7 @@ use wgc_capture::WgcCaptureSession;
 
 const LIFECYCLE_QUEUE_LIMIT: usize = 8;
 const START_OPTION_UNSUPPORTED_LIMIT: usize = 4;
+const FRAME_QUEUE_LIMIT: usize = 3;
 
 type LifecycleTsfn = Arc<
     ThreadsafeFunction<
@@ -54,6 +55,18 @@ type LifecycleTsfn = Arc<
         false,
         true,
         LIFECYCLE_QUEUE_LIMIT,
+    >,
+>;
+
+type FrameDeliveryTsfn = Arc<
+    ThreadsafeFunction<
+        (u32, u32, u32, f64, Buffer),
+        (),
+        (u32, u32, u32, f64, Buffer),
+        napi::Status,
+        false,
+        true,
+        FRAME_QUEUE_LIMIT,
     >,
 >;
 
@@ -191,6 +204,7 @@ pub struct FrameSinkDiagnostics {
 
 pub struct CaptureInner {
     pub lifecycle_tsfn: Mutex<Option<LifecycleTsfn>>,
+    pub frame_tsfn: Mutex<Option<FrameDeliveryTsfn>>,
     #[cfg(target_os = "windows")]
     pub session: Mutex<Option<DxgiCaptureSession>>,
     #[cfg(target_os = "windows")]
@@ -225,6 +239,28 @@ pub fn emit_lifecycle(inner: &CaptureInner, event_type: &str, message: &str) {
     if let Some(tsfn) = guard.as_ref() {
         let _ = tsfn.call(
             (event_type.to_string(), message.to_string()),
+            ThreadsafeFunctionCallMode::NonBlocking,
+        );
+    }
+}
+
+pub fn has_frame_callback(inner: &CaptureInner) -> bool {
+    inner.frame_tsfn.lock().is_some()
+}
+
+pub fn emit_frame_buffer(
+    inner: &CaptureInner,
+    width: u32,
+    height: u32,
+    stride: u32,
+    timestamp_us: f64,
+    data: Vec<u8>,
+) {
+    let guard = inner.frame_tsfn.lock();
+    if let Some(tsfn) = guard.as_ref() {
+        let buffer = Buffer::from(data);
+        let _ = tsfn.call(
+            (width, height, stride, timestamp_us, buffer),
             ThreadsafeFunctionCallMode::NonBlocking,
         );
     }
@@ -422,6 +458,7 @@ impl ScreenCapture {
         Self {
             inner: Arc::new(CaptureInner {
                 lifecycle_tsfn: Mutex::new(None),
+                frame_tsfn: Mutex::new(None),
                 #[cfg(target_os = "windows")]
                 session: Mutex::new(None),
                 #[cfg(target_os = "windows")]
@@ -462,6 +499,23 @@ impl ScreenCapture {
             .build()
             .map(Arc::new)?;
         let mut guard = self.inner.lifecycle_tsfn.lock();
+        *guard = Some(tsfn);
+        Ok(())
+    }
+
+    #[napi(js_name = "setFrameCallback")]
+    pub fn set_frame_callback(
+        &self,
+        callback: Function<(u32, u32, u32, f64, Buffer), ()>,
+    ) -> Result<()> {
+        let tsfn: FrameDeliveryTsfn = callback
+            .build_threadsafe_function::<(u32, u32, u32, f64, Buffer)>()
+            .weak::<true>()
+            .callee_handled::<false>()
+            .max_queue_size::<FRAME_QUEUE_LIMIT>()
+            .build()
+            .map(Arc::new)?;
+        let mut guard = self.inner.frame_tsfn.lock();
         *guard = Some(tsfn);
         Ok(())
     }
@@ -863,7 +917,11 @@ impl ScreenCapture {
             })?
         };
 
-        if let Some(result) = self.try_start_windows_wgc(hwnd, width, height, target_frame_rate)? {
+        let wants_js_frame_delivery = has_frame_callback(&self.inner);
+        if !wants_js_frame_delivery
+            && let Some(result) =
+                self.try_start_windows_wgc(hwnd, width, height, target_frame_rate)?
+        {
             return Ok(result);
         }
 
