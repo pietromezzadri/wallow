@@ -293,7 +293,12 @@ impl AppDevServer {
     }
 
     fn start_css_type_watcher(&self) -> Result<Child> {
-        let tcm = self.project_root.join("node_modules/.bin/tcm");
+        let tcm_name = if cfg!(target_os = "windows") {
+            "node_modules/.bin/tcm.CMD"
+        } else {
+            "node_modules/.bin/tcm"
+        };
+        let tcm = self.project_root.join(tcm_name);
         println!(
             "+ {} src --pattern '**/*.module.css' --watch --silent",
             tcm.display()
@@ -493,9 +498,23 @@ fn gather_lingui_inputs(project_root: &Path) -> Result<StepInputs> {
     )
 }
 
+fn resolve_windows_command(command: &str) -> String {
+    if !cfg!(target_os = "windows") {
+        return command.to_string();
+    }
+    if command == "pnpm" {
+        return "pnpm.cmd".to_string();
+    }
+    let candidate = format!("{command}.CMD");
+    if Path::new(&candidate).is_file() {
+        return candidate;
+    }
+    command.to_string()
+}
+
 fn spawn_child(command: &str, args: &[&str], cwd: &Path) -> Result<Child> {
     println!("+ {}", display_command(command, args));
-    Command::new(command)
+    Command::new(resolve_windows_command(command))
         .args(args)
         .current_dir(cwd)
         .stdin(Stdio::inherit())
