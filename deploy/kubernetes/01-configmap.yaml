@@ -41,6 +41,14 @@ data:
   FLUXER_PUBLIC_SCHEME: "http"
   FLUXER_PUBLIC_PORT: "80"
   FLUXER_PUBLIC_ORIGIN: "http://wallow.local"
+  # Must stay "true": fluxer_api's RequireClientIpMiddleware has no fallback
+  # to the raw socket peer address -- when trust_client_ip_header is false,
+  # client-IP resolution always returns null (see
+  # packages/ip_utils/src/ClientIp.ts), so EVERY non-exempt request gets
+  # rejected, not just the internal ones. The one call that actually lacked a
+  # proxy-stamped X-Forwarded-For (app-proxy's own discovery fetch to api,
+  # which used to go through Caddy) now sets that header itself -- see the
+  # comment in fluxer_app_proxy/src/discovery_cache.rs.
   FLUXER_TRUST_CLIENT_IP_HEADER: "true"
   FLUXER_CLIENT_IP_HEADER_NAME: "x-forwarded-for"
   FLUXER_API_HEADERS_TIMEOUT_MS: "30000"

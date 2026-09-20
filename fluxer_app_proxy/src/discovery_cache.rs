@@ -86,6 +86,15 @@ impl DiscoveryCache {
         let response = client
             .get(upstream_url)
             .header("Accept", "application/json")
+            // This is an in-cluster, service-to-service call with no proxy in
+            // front to stamp a real client address (unlike the old Caddy edge,
+            // which added X-Forwarded-For to everything it proxied, including
+            // this same discovery fetch, on its own). The upstream requires a
+            // resolvable client IP on every non-exempt path, so this synthetic
+            // loopback value satisfies that without granting this call any
+            // trust it shouldn't have -- it never carries a real end-user's
+            // address.
+            .header("X-Forwarded-For", "127.0.0.1")
             .timeout(Duration::from_secs(5))
             .send()
             .await?;
