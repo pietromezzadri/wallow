@@ -2,3 +2,9 @@
 fluxer_static/** -text -diff
 fluxer_static/**/*.md text diff
 packages/fonts/files/** -text -diff
+
+# Shell scripts must keep LF endings regardless of platform/core.autocrlf --
+# a CRLF shebang line (`#!/usr/bin/env bash\r`) fails to exec on Linux with
+# "bash\r: No such file or directory", which breaks any Docker build or CI
+# step that copies these scripts from a Windows checkout.
+*.sh text eol=lf
