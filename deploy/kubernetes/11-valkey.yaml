@@ -1,0 +1,88 @@
+# Mirrors the `valkey` service in docker-compose.yml. Valkey holds durable
+# state (bulk-deletion queue, account-deletion queue) as well as cache, hence
+# the appendonly file on a real PVC with noeviction -- see the comment in
+# .env.example above FLUXER_VALKEY_MAXMEMORY_POLICY.
+apiVersion: v1
+kind: Service
+metadata:
+  name: valkey
+  namespace: wallow
+  labels:
+    app: valkey
+spec:
+  clusterIP: None
+  selector:
+    app: valkey
+  ports:
+    - name: valkey
+      port: 6379
+      targetPort: 6379
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: valkey
+  namespace: wallow
+  labels:
+    app: valkey
+spec:
+  serviceName: valkey
+  replicas: 1
+  selector:
+    matchLabels:
+      app: valkey
+  template:
+    metadata:
+      labels:
+        app: valkey
+    spec:
+      containers:
+        - name: valkey
+          image: valkey/valkey:8.1-alpine
+          command:
+            - valkey-server
+            - "--appendonly"
+            - "yes"
+            - "--appendfsync"
+            - "everysec"
+            - "--dir"
+            - "/data"
+            - "--maxmemory"
+            - "192mb"
+            - "--maxmemory-policy"
+            - "noeviction"
+          ports:
+            - name: valkey
+              containerPort: 6379
+          volumeMounts:
+            - name: valkey-data
+              mountPath: /data
+          readinessProbe:
+            exec:
+              command: ["valkey-cli", "ping"]
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 10
+          livenessProbe:
+            exec:
+              command: ["valkey-cli", "ping"]
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 96Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+  volumeClaimTemplates:
+    - metadata:
+        name: valkey-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 2Gi

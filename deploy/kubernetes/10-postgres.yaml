@@ -1,0 +1,140 @@
+# Mirrors the `postgres` service in docker-compose.yml. Tuning flags copied
+# from its `command:` block; memory-proportional settings trimmed to fit a
+# 1-2Gi container instead of compose's 5Gi default ceiling (shared_buffers,
+# effective_cache_size, connection count all scaled down to match), since
+# this is a single personal instance rather than a production sizing target.
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: wallow
+  labels:
+    app: postgres
+spec:
+  clusterIP: None
+  selector:
+    app: postgres
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: 5432
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  namespace: wallow
+  labels:
+    app: postgres
+spec:
+  serviceName: postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          command:
+            - postgres
+            - -c
+            - max_connections=100
+            - -c
+            - shared_buffers=384MB
+            - -c
+            - effective_cache_size=1GB
+            - -c
+            - work_mem=8MB
+            - -c
+            - maintenance_work_mem=128MB
+            - -c
+            - autovacuum_work_mem=64MB
+            - -c
+            - random_page_cost=1.1
+            - -c
+            - effective_io_concurrency=200
+            - -c
+            - default_statistics_target=200
+            - -c
+            - jit=off
+            - -c
+            - min_wal_size=512MB
+            - -c
+            - max_wal_size=2GB
+            - -c
+            - checkpoint_completion_target=0.9
+            - -c
+            - wal_buffers=16MB
+            - -c
+            - wal_compression=zstd
+            - -c
+            - bgwriter_delay=50ms
+            - -c
+            - bgwriter_lru_maxpages=1000
+            - -c
+            - autovacuum_vacuum_scale_factor=0.05
+            - -c
+            - autovacuum_analyze_scale_factor=0.02
+            - -c
+            - autovacuum_vacuum_cost_limit=2000
+            - -c
+            - track_io_timing=on
+            - -c
+            - shared_preload_libraries=pg_stat_statements
+          ports:
+            - name: postgres
+              containerPort: 5432
+          env:
+            - name: POSTGRES_DB
+              value: "fluxer"
+            - name: POSTGRES_USER
+              value: "fluxer"
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: wallow-secrets
+                  key: POSTGRES_PASSWORD
+          volumeMounts:
+            - name: postgres-data
+              mountPath: /var/lib/postgresql/data
+            - name: dshm
+              mountPath: /dev/shm
+          readinessProbe:
+            exec:
+              command: ["sh", "-c", "pg_isready -U fluxer -d fluxer"]
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 10
+          livenessProbe:
+            exec:
+              command: ["sh", "-c", "pg_isready -U fluxer -d fluxer"]
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 10
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1Gi
+            limits:
+              cpu: 2000m
+              memory: 2Gi
+      volumes:
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 256Mi
+  volumeClaimTemplates:
+    - metadata:
+        name: postgres-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 10Gi

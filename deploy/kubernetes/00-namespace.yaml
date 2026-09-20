@@ -1,0 +1,8 @@
+# Namespace holding the entire Wallow (Fluxer) self-hosted stack.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: wallow
+  labels:
+    name: wallow
+    app.kubernetes.io/part-of: wallow

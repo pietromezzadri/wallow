@@ -1,0 +1,207 @@
+# Replicates the Caddyfile's routing table (deploy/self-hosting/Caddyfile) as
+# nginx Ingress objects. Path-by-path mapping:
+#
+#   Caddyfile                                          Ingress rule below
+#   ------------------------------------------------    --------------------------------
+#   handle_path /api/*          -> api:8080             /api/*           -> api:8080       (wallow-stripped)
+#   handle /gateway (+rewrite)  -> gateway:8080          /gateway (exact) -> gateway:8080   (wallow)
+#   handle_path /gateway/*      -> gateway:8080          /gateway/*       -> gateway:8080   (wallow-stripped)
+#   handle_path /media/*        -> media-proxy:8080      /media/*         -> media-proxy:8080 (wallow-stripped)
+#   handle_path /livekit/*      -> livekit:7880          /livekit/*       -> livekit:7880   (wallow-stripped)
+#   handle /admin (+rewrite)    -> admin:8080            /admin (exact)   -> admin:8080     (wallow)
+#   handle_path /admin/*        -> admin:8080            /admin/*         -> admin:8080     (wallow-stripped)
+#   @staticAssets (7 paths)     -> static-proxy:8080     each path below  -> static-proxy:8080 (wallow)
+#   handle /.well-known/fluxer  -> api:8080              /.well-known/fluxer -> api:8080    (wallow)
+#   handle (everything else)    -> app-proxy:8080        (default backend) -> app-proxy:8080 (wallow)
+#
+# Caddy's `handle_path` strips the matched prefix before proxying (so
+# `/api/foo` reaches the backend as `/foo`); ingress-nginx does the same only
+# when the rewrite-target annotation is set, and that annotation applies to
+# every path on the Ingress OBJECT it's set on, not per-path within one
+# object -- so the five prefix-stripped routes (api, gateway/*, media,
+# livekit, admin/*) live on their own "wallow-stripped" Ingress with
+# rewrite-target: /$2, and everything that must NOT be stripped (the bare
+# /gateway and /admin exact matches Caddy's `rewrite * /` collapses to "/",
+# the static asset prefixes, /.well-known/fluxer, and the app-proxy
+# catch-all) lives on the plain "wallow" Ingress below with no rewrite
+# annotation. Both target the same host (wallow.local); ingress-nginx merges
+# every Ingress object for a host into one generated server block, so
+# splitting strip vs. no-strip routes this way is the standard way to mix
+# both rewrite behaviours on one hostname.
+#
+# `hostNetwork` note for LiveKit media itself (7881/tcp, 7882/udp): those
+# never go through this Ingress at all -- see the big comment in
+# 32-livekit.yaml. Only LiveKit's signalling (7880) is routed here.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: wallow
+  namespace: wallow
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "0"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "120"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "120"
+    # Needed for the gateway (websocket) and livekit (websocket signalling)
+    # upstreams to survive long-lived connections.
+    nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: wallow.local
+      http:
+        paths:
+          # bare /gateway -> gateway:8080 at "/" (Caddyfile: handle /gateway { rewrite * / })
+          - path: /gateway
+            pathType: Exact
+            backend:
+              service:
+                name: gateway
+                port:
+                  number: 8080
+
+          # bare /admin -> admin:8080 at "/" (Caddyfile: handle /admin { rewrite * / })
+          - path: /admin
+            pathType: Exact
+            backend:
+              service:
+                name: admin
+                port:
+                  number: 8080
+
+          # Static asset paths (Caddyfile: @staticAssets path /web/* /emoji/* /libs/*
+          # /avatars/* /badges/* /desktop/* /embeds/*) -> static-proxy:8080.
+          # These are NOT prefix-stripped in the Caddyfile (plain `reverse_proxy`,
+          # not `handle_path`), so no rewrite-target here either -- static-proxy
+          # sees the full /web/... path, same as it does behind Caddy.
+          - path: /web
+            pathType: Prefix
+            backend:
+              service:
+                name: static-proxy
+                port:
+                  number: 8080
+          - path: /emoji
+            pathType: Prefix
+            backend:
+              service:
+                name: static-proxy
+                port:
+                  number: 8080
+          - path: /libs
+            pathType: Prefix
+            backend:
+              service:
+                name: static-proxy
+                port:
+                  number: 8080
+          - path: /avatars
+            pathType: Prefix
+            backend:
+              service:
+                name: static-proxy
+                port:
+                  number: 8080
+          - path: /badges
+            pathType: Prefix
+            backend:
+              service:
+                name: static-proxy
+                port:
+                  number: 8080
+          - path: /desktop
+            pathType: Prefix
+            backend:
+              service:
+                name: static-proxy
+                port:
+                  number: 8080
+          - path: /embeds
+            pathType: Prefix
+            backend:
+              service:
+                name: static-proxy
+                port:
+                  number: 8080
+
+          # /.well-known/fluxer -> api:8080 (Caddyfile: handle /.well-known/fluxer),
+          # not prefix-stripped, matches exactly.
+          - path: /.well-known/fluxer
+            pathType: Exact
+            backend:
+              service:
+                name: api
+                port:
+                  number: 8080
+
+          # Everything else (Caddyfile: handle { reverse_proxy app-proxy:8080 }).
+          # Default/catch-all backend for this host.
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: app-proxy
+                port:
+                  number: 8080
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: wallow-stripped
+  namespace: wallow
+  annotations:
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+    nginx.ingress.kubernetes.io/proxy-body-size: "0"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "120"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "120"
+    nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: wallow.local
+      http:
+        paths:
+          # /api/* -> api:8080, prefix stripped (Caddyfile: handle_path /api/*)
+          - path: /api(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: api
+                port:
+                  number: 8080
+
+          # /gateway/* -> gateway:8080, prefix stripped (Caddyfile: handle_path /gateway/*)
+          - path: /gateway(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: gateway
+                port:
+                  number: 8080
+
+          # /media/* -> media-proxy:8080, prefix stripped (Caddyfile: handle_path /media/*)
+          - path: /media(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: media-proxy
+                port:
+                  number: 8080
+
+          # /livekit/* -> livekit:7880, prefix stripped (Caddyfile: handle_path /livekit/*)
+          - path: /livekit(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: livekit
+                port:
+                  number: 7880
+
+          # /admin/* -> admin:8080, prefix stripped (Caddyfile: handle_path /admin/*)
+          - path: /admin(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: admin
+                port:
+                  number: 8080

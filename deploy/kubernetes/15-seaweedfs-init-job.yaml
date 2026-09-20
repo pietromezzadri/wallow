@@ -1,0 +1,107 @@
+# Mirrors the `seaweedfs-init` one-shot service in docker-compose.yml: waits
+# for SeaweedFS's master port, creates the 5 buckets if missing, and
+# configures the `fluxer` S3 identity with the access/secret key pair from
+# wallow-secrets. The shell logic in `command:` below is copied verbatim from
+# compose's entrypoint (same retry/poll behaviour), just re-hosted as a k8s
+# Job instead of a restart:"no" compose service.
+#
+# api (20-api.yaml) and media-proxy (23-media-proxy.yaml) both wait on this
+# Job in compose via `depends_on: seaweedfs-init: {condition:
+# service_completed_successfully}`. There is no first-class "wait for Job
+# completion" primitive in a plain-manifest readinessProbe/initContainer
+# without extra RBAC to call the k8s API, so their initContainers instead
+# wait on SeaweedFS's own health endpoint as a stand-in -- see the comment in
+# those files. In practice this Job finishes in a few seconds, well before
+# api's dependent probes would otherwise pass, so the ordering gap is
+# unlikely to matter for a single personal instance, but it is a real
+# simplification worth knowing about.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: seaweedfs-init
+  namespace: wallow
+spec:
+  backoffLimit: 3
+  template:
+    metadata:
+      labels:
+        app: seaweedfs-init
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: seaweedfs-init
+          image: chrislusf/seaweedfs:4.34
+          env:
+            - name: FLUXER_S3_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: wallow-secrets
+                  key: FLUXER_S3_ACCESS_KEY
+            - name: FLUXER_S3_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: wallow-secrets
+                  key: FLUXER_S3_SECRET_KEY
+            - name: FLUXER_S3_BUCKET_CDN
+              valueFrom:
+                configMapKeyRef:
+                  name: wallow-config
+                  key: FLUXER_S3_BUCKET_CDN
+            - name: FLUXER_S3_BUCKET_UPLOADS
+              valueFrom:
+                configMapKeyRef:
+                  name: wallow-config
+                  key: FLUXER_S3_BUCKET_UPLOADS
+            - name: FLUXER_S3_BUCKET_DOWNLOADS
+              valueFrom:
+                configMapKeyRef:
+                  name: wallow-config
+                  key: FLUXER_S3_BUCKET_DOWNLOADS
+            - name: FLUXER_S3_BUCKET_REPORTS
+              valueFrom:
+                configMapKeyRef:
+                  name: wallow-config
+                  key: FLUXER_S3_BUCKET_REPORTS
+            - name: FLUXER_S3_BUCKET_HARVESTS
+              valueFrom:
+                configMapKeyRef:
+                  name: wallow-config
+                  key: FLUXER_S3_BUCKET_HARVESTS
+          command:
+            - /bin/sh
+            - -c
+            - >
+              buckets="$FLUXER_S3_BUCKET_CDN $FLUXER_S3_BUCKET_UPLOADS $FLUXER_S3_BUCKET_DOWNLOADS $FLUXER_S3_BUCKET_REPORTS $FLUXER_S3_BUCKET_HARVESTS";
+              missing="$buckets";
+              for attempt in $(seq 1 60); do
+                if ! nc -z seaweedfs 9333 2>/dev/null; then
+                  sleep 2;
+                  continue;
+                fi;
+                listed=$(echo "s3.bucket.list" | timeout 10 weed shell -master=seaweedfs:9333 2>&1);
+                missing="";
+                for b in $buckets; do
+                  echo "$listed" | grep -q "^[[:space:]]*$b[[:space:]]" || missing="${missing:+$missing }$b";
+                done;
+                if [ -z "$missing" ]; then
+                  if ! echo "s3.configure -user=fluxer -access_key=$FLUXER_S3_ACCESS_KEY -secret_key=$FLUXER_S3_SECRET_KEY -actions=Admin,Read,Write,List,Tagging -apply" | timeout 10 weed shell -master=seaweedfs:9333 >/dev/null 2>&1; then
+                    echo "seaweedfs-init could not configure the S3 identity" >&2;
+                    exit 1;
+                  fi;
+                  echo "buckets ready";
+                  exit 0;
+                fi;
+                for b in $missing; do
+                  echo "s3.bucket.create -name $b" | timeout 10 weed shell -master=seaweedfs:9333 >/dev/null 2>&1;
+                done;
+                sleep 2;
+              done;
+              echo "seaweedfs-init could not verify buckets: $missing" >&2;
+              exit 1;
+          resources:
+            requests:
+              cpu: 50m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi

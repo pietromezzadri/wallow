@@ -1,0 +1,202 @@
+# Mirrors the `livekit` service in docker-compose.yml.
+#
+# =====================================================================
+# THE FRAGILE PART. Read this before assuming voice/video "just works".
+# =====================================================================
+#
+# LiveKit's signalling (HTTP/WS on 7880) is ordinary cluster traffic and
+# works through the `livekit` ClusterIP Service below like everything else.
+# The problem is WebRTC MEDIA (7881/tcp, 7882/udp): browsers connect to those
+# ports DIRECTLY, not through the Ingress or any Service proxy, because
+# that's how ICE/ WebRTC works -- LiveKit tells the browser "dial me at
+# <node_ip>:7881/7882" and the browser does exactly that, bypassing
+# kube-proxy and the Ingress controller entirely.
+#
+# Two structural problems follow from that on minikube:
+#
+#  1. kube-proxy's normal ClusterIP/NodePort path adds a NAT hop that
+#     WebRTC's ICE negotiation cannot see through (LiveKit would advertise an
+#     address the browser can dial, but the return path back to the exact
+#     pod wouldn't be guaranteed with a plain NodePort's round-robin/SNAT
+#     behaviour, and UDP through kube-proxy's iptables/ipvs conntrack has a
+#     history of dropping long-idle WebRTC streams).
+#  2. k8s NodePort Services can only allocate host ports from 30000-32767 by
+#     default, so a NodePort can't even publish literally 7881/7882 -- the
+#     ports LiveKit's ICE candidates advertise -- without also reconfiguring
+#     LiveKit to advertise the remapped 30000+ ports instead (LIVEKIT_CONFIG
+#     rtc.tcp_port/udp_port would need to change to match, and LiveKit and
+#     the Service would need to agree on that remap every time either
+#     changes).
+#
+# The workaround here is hostNetwork: true on the LiveKit pod: the container
+# binds 7880/7881/7882 directly on the minikube node's own network namespace,
+# with no Service/NAT hop in the way for the media ports, and the advertised
+# node_ip is set automatically at container start from the Downward API's
+# status.hostIP (a fieldRef, injected as $HOST_IP below) -- which for a
+# hostNetwork pod IS the node's address, i.e. normally identical to what
+# `minikube ip` prints. If that assumption is ever wrong for your minikube
+# driver/setup (check with `minikube ip` and compare against the pod's
+# HOST_IP, e.g. `kubectl exec -n wallow deploy/livekit -- env | grep HOST_IP`),
+# hardcode node_ip in the shell block below instead of trusting $HOST_IP.
+#
+# Consequences of hostNetwork: true worth knowing:
+#  - Only one LiveKit pod can ever run per node (it owns the host's 7880/
+#    7881/7882 outright) -- a non-issue here since this is replicas: 1 on a
+#    single-node minikube cluster, but it means this Deployment cannot be
+#    scaled the normal way.
+#  - dnsPolicy must be ClusterFirstWithHostNet, not the pod-network default,
+#    or the container can't resolve in-cluster names like "api" for its
+#    webhook callback.
+#  - UDP through minikube's own networking layer (the docker driver runs
+#    minikube itself as a container; WSL2 adds another virtualization layer
+#    below that) is the single least-tested path in this whole deployment.
+#    Even with hostNetwork removing kube-proxy from the equation, UDP still
+#    has to cross minikube's driver network and WSL2's NAT to reach a real
+#    browser. If voice/video connects but audio/video never actually flows,
+#    this is where to look first -- try a TURN-over-TCP fallback (LiveKit
+#    supports this) before assuming the whole approach is broken.
+#
+# A NodePort Service is sketched out, commented, at the bottom of this file
+# as the alternative if hostNetwork turns out not to work in your setup --
+# it requires remapping LIVEKIT_CONFIG's rtc.tcp_port/udp_port to whatever
+# 30000-32767 ports you allocate, which is why it isn't the default here.
+apiVersion: v1
+kind: Service
+metadata:
+  name: livekit
+  namespace: wallow
+  labels:
+    app: livekit
+spec:
+  selector:
+    app: livekit
+  ports:
+    - name: http
+      port: 7880
+      targetPort: 7880
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: livekit
+  namespace: wallow
+  labels:
+    app: livekit
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: livekit
+  template:
+    metadata:
+      labels:
+        app: livekit
+    spec:
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      containers:
+        - name: livekit
+          image: livekit/livekit-server:v1.12.0
+          env:
+            - name: HOST_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.hostIP
+            - name: LIVEKIT_API_KEY
+              valueFrom:
+                secretKeyRef: {name: wallow-secrets, key: LIVEKIT_API_KEY}
+            - name: LIVEKIT_API_SECRET
+              valueFrom:
+                secretKeyRef: {name: wallow-secrets, key: LIVEKIT_API_SECRET}
+            - name: LIVEKIT_KEYS
+              valueFrom:
+                secretKeyRef: {name: wallow-secrets, key: LIVEKIT_KEYS}
+          command: ["sh", "-c"]
+          args:
+            - |
+              set -e
+              LIVEKIT_CONFIG=$(cat <<EOF
+              port: 7880
+              log_level: info
+              rtc:
+                tcp_port: 7881
+                udp_port: 7882
+                use_external_ip: false
+                node_ip: "$HOST_IP"
+                stun_servers:
+                  - stun.l.google.com:19302
+                  - stun1.l.google.com:19302
+              webhook:
+                api_key: $LIVEKIT_API_KEY
+                urls:
+                  - http://api:8080/webhooks/livekit
+              EOF
+              )
+              export LIVEKIT_CONFIG
+              echo "starting livekit-server with node_ip=$HOST_IP (from Downward API status.hostIP; compare against \`minikube ip\` if media doesn't connect)"
+              exec /livekit-server
+          ports:
+            - name: http
+              containerPort: 7880
+              protocol: TCP
+            - name: rtc-tcp
+              containerPort: 7881
+              protocol: TCP
+            - name: rtc-udp
+              containerPort: 7882
+              protocol: UDP
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 7880
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 7880
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 10
+          resources:
+            requests:
+              cpu: 200m
+              memory: 256Mi
+            limits:
+              cpu: 1000m
+              memory: 512Mi
+---
+# ALTERNATIVE (commented out): a NodePort Service instead of hostNetwork.
+# Only use this if hostNetwork proves unworkable in your setup. It needs
+# LIVEKIT_CONFIG's rtc.tcp_port/udp_port changed to match the allocated
+# 30000-32767 nodePorts (they cannot be 7881/7882 -- see the long comment
+# above), and FLUXER_LIVEKIT_URL/STUN advertisement would need to reflect
+# the remapped ports too.
+#
+# apiVersion: v1
+# kind: Service
+# metadata:
+#   name: livekit-media
+#   namespace: wallow
+#   labels:
+#     app: livekit
+# spec:
+#   type: NodePort
+#   selector:
+#     app: livekit
+#   ports:
+#     - name: rtc-tcp
+#       port: 31881
+#       targetPort: 31881
+#       nodePort: 31881
+#       protocol: TCP
+#     - name: rtc-udp
+#       port: 31882
+#       targetPort: 31882
+#       nodePort: 31882
+#       protocol: UDP

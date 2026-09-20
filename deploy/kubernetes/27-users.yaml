@@ -1,0 +1,184 @@
+# Mirrors the `users` + `users-shard` services in docker-compose.yml.
+#
+# depends_on: router waits on nats (healthy). The shard waits on nats
+# (healthy) AND postgres (healthy).
+apiVersion: v1
+kind: Service
+metadata:
+  name: users
+  namespace: wallow
+  labels:
+    app: users
+spec:
+  selector:
+    app: users
+  ports:
+    - name: http
+      port: 8090
+      targetPort: 8090
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: users-shard
+  namespace: wallow
+  labels:
+    app: users-shard
+spec:
+  selector:
+    app: users-shard
+  ports:
+    - name: http
+      port: 8090
+      targetPort: 8090
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: users
+  namespace: wallow
+  labels:
+    app: users
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: users
+  template:
+    metadata:
+      labels:
+        app: users
+    spec:
+      initContainers:
+        - name: wait-for-deps
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              until wget -q -O /dev/null http://nats:8222/healthz; do sleep 2; done
+      containers:
+        - name: users
+          image: ghcr.io/fluxerapp/fluxer-users:v1
+          ports:
+            - name: http
+              containerPort: 8090
+          envFrom:
+            - configMapRef:
+                name: wallow-config
+            - secretRef:
+                name: wallow-secrets
+          env:
+            - name: FLUXER_POSTGRES_PASSWORD
+              valueFrom: {secretKeyRef: {name: wallow-secrets, key: POSTGRES_PASSWORD}}
+            - name: FLUXER_SEARCH_API_KEY
+              valueFrom: {secretKeyRef: {name: wallow-secrets, key: MEILI_MASTER_KEY}}
+            - name: FLUXER_S3_ACCESS_KEY_ID
+              valueFrom: {secretKeyRef: {name: wallow-secrets, key: FLUXER_S3_ACCESS_KEY}}
+            - name: FLUXER_S3_SECRET_ACCESS_KEY
+              valueFrom: {secretKeyRef: {name: wallow-secrets, key: FLUXER_S3_SECRET_KEY}}
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom: {secretKeyRef: {name: wallow-secrets, key: FLUXER_S3_ACCESS_KEY}}
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom: {secretKeyRef: {name: wallow-secrets, key: FLUXER_S3_SECRET_KEY}}
+            - name: FLUXER_LIVEKIT_API_KEY
+              valueFrom: {secretKeyRef: {name: wallow-secrets, key: LIVEKIT_API_KEY}}
+            - name: FLUXER_LIVEKIT_API_SECRET
+              valueFrom: {secretKeyRef: {name: wallow-secrets, key: LIVEKIT_API_SECRET}}
+            - name: FLUXER_SVC_NAME
+              value: "users"
+            - name: FLUXER_SVC_MODE
+              value: "router"
+          readinessProbe:
+            httpGet: {path: /_health, port: 8090}
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 15
+          livenessProbe:
+            httpGet: {path: /_health, port: 8090}
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 10
+          resources:
+            requests: {cpu: 50m, memory: 64Mi}
+            limits: {cpu: 200m, memory: 128Mi}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: users-shard
+  namespace: wallow
+  labels:
+    app: users-shard
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: users-shard
+  template:
+    metadata:
+      labels:
+        app: users-shard
+    spec:
+      initContainers:
+        - name: wait-for-deps
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              until wget -q -O /dev/null http://nats:8222/healthz; do sleep 2; done
+              until nc -z postgres 5432; do sleep 2; done
+      containers:
+        - name: users-shard
+          image: ghcr.io/fluxerapp/fluxer-users:v1
+          ports:
+            - name: http
+              containerPort: 8090
+          envFrom:
+            - configMapRef:
+                name: wallow-config
+            - secretRef:
+                name: wallow-secrets
+          env:
+            - name: FLUXER_POSTGRES_PASSWORD
+              valueFrom: {secretKeyRef: {name: wallow-secrets, key: POSTGRES_PASSWORD}}
+            - name: FLUXER_SEARCH_API_KEY
+              valueFrom: {secretKeyRef: {name: wallow-secrets, key: MEILI_MASTER_KEY}}
+            - name: FLUXER_S3_ACCESS_KEY_ID
+              valueFrom: {secretKeyRef: {name: wallow-secrets, key: FLUXER_S3_ACCESS_KEY}}
+            - name: FLUXER_S3_SECRET_ACCESS_KEY
+              valueFrom: {secretKeyRef: {name: wallow-secrets, key: FLUXER_S3_SECRET_KEY}}
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom: {secretKeyRef: {name: wallow-secrets, key: FLUXER_S3_ACCESS_KEY}}
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom: {secretKeyRef: {name: wallow-secrets, key: FLUXER_S3_SECRET_KEY}}
+            - name: FLUXER_LIVEKIT_API_KEY
+              valueFrom: {secretKeyRef: {name: wallow-secrets, key: LIVEKIT_API_KEY}}
+            - name: FLUXER_LIVEKIT_API_SECRET
+              valueFrom: {secretKeyRef: {name: wallow-secrets, key: LIVEKIT_API_SECRET}}
+            - name: FLUXER_SVC_NAME
+              value: "users"
+            - name: FLUXER_SVC_MODE
+              value: "shard"
+            - name: FLUXER_SVC_SHARD_ID
+              value: "0"
+            - name: FLUXER_POSTGRES_MAX_CONNECTIONS
+              value: "20"
+          readinessProbe:
+            httpGet: {path: /_health, port: 8090}
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 15
+          livenessProbe:
+            httpGet: {path: /_health, port: 8090}
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 10
+          resources:
+            requests: {cpu: 100m, memory: 128Mi}
+            limits: {cpu: 300m, memory: 256Mi}

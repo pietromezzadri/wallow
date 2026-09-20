@@ -1,0 +1,136 @@
+# Mirrors the `app-proxy` service in docker-compose.yml -- the self-hosted
+# app shell/bootstrap proxy, the Ingress's default backend (everything the
+# Caddyfile doesn't route elsewhere falls through to app-proxy, same as
+# `handle { reverse_proxy app-proxy:8080 }`).
+#
+# Unlike every other service here, this one is built locally into minikube's
+# own Docker daemon (`eval $(minikube docker-env) && docker build -t
+# wallow-app-proxy:local fluxer_app_proxy/`, done separately, not by this
+# manifest) rather than pulled from ghcr.io. imagePullPolicy: IfNotPresent is
+# required so the kubelet uses the image already loaded into minikube's
+# daemon instead of trying (and failing) to pull "wallow-app-proxy:local"
+# from a registry -- there is no such registry image.
+#
+# DISCOVERY_UPSTREAM_URL differs from compose on purpose: compose points it
+# at `http://edge:8088/.well-known/fluxer`, a second, unrouted Caddy site
+# block that exists purely to give app-proxy an internal path straight to
+# api without going through the public-facing site block. Since Caddy's
+# `edge` role is replaced entirely by the Ingress here (no edge container at
+# all), app-proxy talks to api directly instead: `http://api:8080/.well-known/fluxer`.
+# Functionally equivalent -- same upstream (api), just one less hop.
+#
+# depends_on translation: compose waits on api (healthy) and edge (healthy);
+# edge no longer exists, so only api is waited on.
+apiVersion: v1
+kind: Service
+metadata:
+  name: app-proxy
+  namespace: wallow
+  labels:
+    app: app-proxy
+spec:
+  selector:
+    app: app-proxy
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app-proxy
+  namespace: wallow
+  labels:
+    app: app-proxy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: app-proxy
+  template:
+    metadata:
+      labels:
+        app: app-proxy
+    spec:
+      initContainers:
+        - name: wait-for-deps
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+              until wget -q -O /dev/null http://api:8080/_health; do echo "waiting for http api:8080/_health"; sleep 2; done
+              echo "all dependencies ready"
+      containers:
+        - name: app-proxy
+          image: wallow-app-proxy:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: FLUXER_APP_PROXY_HOST
+              value: "0.0.0.0"
+            - name: FLUXER_APP_PROXY_PORT
+              value: "8080"
+            - name: FLUXER_BASE_DOMAIN
+              value: "wallow.local"
+            - name: FLUXER_PUBLIC_SCHEME
+              value: "http"
+            - name: FLUXER_PUBLIC_PORT
+              value: "80"
+            - name: FLUXER_PUBLIC_ORIGIN
+              value: "http://wallow.local"
+            - name: DISCOVERY_UPSTREAM_URL
+              value: "http://api:8080/.well-known/fluxer"
+            - name: PUBLIC_BOOTSTRAP_API_ENDPOINT
+              value: "/api"
+            - name: PUBLIC_BOOTSTRAP_API_PUBLIC_ENDPOINT
+              value: "http://wallow.local/api"
+            - name: FLUXER_CSP_EXTRA_DEFAULT_SRC
+              value: ""
+            - name: FLUXER_CSP_EXTRA_CONNECT_SRC
+              value: ""
+            - name: FLUXER_CSP_EXTRA_IMG_SRC
+              value: ""
+            - name: FLUXER_CSP_EXTRA_MEDIA_SRC
+              value: ""
+            - name: FLUXER_CSP_EXTRA_FONT_SRC
+              value: ""
+            - name: FLUXER_CSP_EXTRA_SCRIPT_SRC
+              value: ""
+            - name: FLUXER_CSP_EXTRA_STYLE_SRC
+              value: ""
+            - name: FLUXER_CSP_EXTRA_FRAME_SRC
+              value: ""
+            - name: FLUXER_CSP_EXTRA_WORKER_SRC
+              value: ""
+            - name: FLUXER_CSP_EXTRA_MANIFEST_SRC
+              value: ""
+            - name: FLUXER_CSP_REPORT_URI
+              value: ""
+          readinessProbe:
+            httpGet:
+              path: /_health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 10
+          livenessProbe:
+            httpGet:
+              path: /_health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 10
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi

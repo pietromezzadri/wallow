@@ -1,0 +1,114 @@
+# Mirrors the `gateway` service in docker-compose.yml (the websocket/Erlang
+# gateway). depends_on: nats, valkey (healthy).
+apiVersion: v1
+kind: Service
+metadata:
+  name: gateway
+  namespace: wallow
+  labels:
+    app: gateway
+spec:
+  selector:
+    app: gateway
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gateway
+  namespace: wallow
+  labels:
+    app: gateway
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gateway
+  template:
+    metadata:
+      labels:
+        app: gateway
+    spec:
+      initContainers:
+        - name: wait-for-deps
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+              wait_tcp() { until nc -z "$1" "$2"; do echo "waiting for tcp $1:$2"; sleep 2; done; }
+              wait_http() { until wget -q -O /dev/null "$1"; do echo "waiting for http $1"; sleep 2; done; }
+              wait_tcp valkey 6379
+              wait_http http://nats:8222/healthz
+              echo "all dependencies ready"
+      containers:
+        - name: gateway
+          image: ghcr.io/fluxerapp/fluxer-gateway:v1
+          ports:
+            - name: http
+              containerPort: 8080
+            - name: internal
+              containerPort: 8081
+            - name: epmd
+              containerPort: 4369
+          envFrom:
+            - configMapRef:
+                name: wallow-config
+            - secretRef:
+                name: wallow-secrets
+          env:
+            - name: FLUXER_POSTGRES_PASSWORD
+              valueFrom: {secretKeyRef: {name: wallow-secrets, key: POSTGRES_PASSWORD}}
+            - name: FLUXER_SEARCH_API_KEY
+              valueFrom: {secretKeyRef: {name: wallow-secrets, key: MEILI_MASTER_KEY}}
+            - name: FLUXER_S3_ACCESS_KEY_ID
+              valueFrom: {secretKeyRef: {name: wallow-secrets, key: FLUXER_S3_ACCESS_KEY}}
+            - name: FLUXER_S3_SECRET_ACCESS_KEY
+              valueFrom: {secretKeyRef: {name: wallow-secrets, key: FLUXER_S3_SECRET_KEY}}
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom: {secretKeyRef: {name: wallow-secrets, key: FLUXER_S3_ACCESS_KEY}}
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom: {secretKeyRef: {name: wallow-secrets, key: FLUXER_S3_SECRET_KEY}}
+            - name: FLUXER_LIVEKIT_API_KEY
+              valueFrom: {secretKeyRef: {name: wallow-secrets, key: LIVEKIT_API_KEY}}
+            - name: FLUXER_LIVEKIT_API_SECRET
+              valueFrom: {secretKeyRef: {name: wallow-secrets, key: LIVEKIT_API_SECRET}}
+            - name: FLUXER_GATEWAY_PORT
+              value: "8080"
+            - name: FLUXER_GATEWAY_MEDIA_PROXY_ENDPOINT
+              value: "http://wallow.local/media"
+            - name: FLUXER_GATEWAY_STATIC_CDN_ENDPOINT
+              value: "http://wallow.local"
+            - name: FLUXER_GATEWAY_LOGGER_LEVEL
+              value: "info"
+            - name: FLUXER_ERLANG_SCHEDULERS_MIN
+              value: "2"
+            - name: FLUXER_ERLANG_SCHEDULERS_MAX
+              value: "16"
+          readinessProbe:
+            httpGet:
+              path: /_health/ready
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /_health/ready
+              port: 8080
+            initialDelaySeconds: 60
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 10
+          resources:
+            requests:
+              cpu: 250m
+              memory: 384Mi
+            limits:
+              cpu: 1000m
+              memory: 1Gi

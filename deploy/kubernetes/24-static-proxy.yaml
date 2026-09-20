@@ -1,0 +1,65 @@
+# Mirrors the `static-proxy` service in docker-compose.yml. Compose sets no
+# environment variables at all for this service and no depends_on, so this
+# Deployment carries none either -- it serves static assets baked into its
+# own image.
+apiVersion: v1
+kind: Service
+metadata:
+  name: static-proxy
+  namespace: wallow
+  labels:
+    app: static-proxy
+spec:
+  selector:
+    app: static-proxy
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: static-proxy
+  namespace: wallow
+  labels:
+    app: static-proxy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: static-proxy
+  template:
+    metadata:
+      labels:
+        app: static-proxy
+    spec:
+      containers:
+        - name: static-proxy
+          image: ghcr.io/fluxerapp/fluxer-static:v1
+          ports:
+            - name: http
+              containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /avatars/0.png
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 10
+          livenessProbe:
+            httpGet:
+              path: /avatars/0.png
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 10
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi

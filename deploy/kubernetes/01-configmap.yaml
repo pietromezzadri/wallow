@@ -1,0 +1,124 @@
+# Every non-secret env var shared across services, mirrored from the
+# x-fluxer-postgres-env / x-fluxer-env anchors in
+# deploy/self-hosting/docker-compose.yml. Secret-bearing keys from those same
+# anchors (passwords, tokens, API keys) live in the wallow-secrets Secret
+# instead (see 02-secrets-template.yaml / 02-generate-secrets.sh) and are
+# either pulled in via envFrom on the Secret (when the container-side name
+# already matches the secret key name) or remapped with an explicit
+# env: entry (when it doesn't, e.g. POSTGRES_PASSWORD -> FLUXER_POSTGRES_PASSWORD).
+#
+# Host names below use plain in-cluster Service DNS names (e.g. "postgres")
+# rather than the compose bare service names' equivalents with
+# ".wallow.svc.cluster.local" -- both resolve identically for same-namespace
+# traffic, the short form is simply easier to read. Ports are unchanged from
+# compose since nothing else about the topology changes.
+#
+# FLUXER_BASE_DOMAIN / FLUXER_PUBLIC_ORIGIN etc. point at http://wallow.local,
+# the Ingress host this deployment answers on (see 40-ingress.yaml). Add
+# "<minikube ip>  wallow.local" to /etc/hosts (or your resolver) to reach it.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: wallow-config
+  namespace: wallow
+data:
+  # --- Postgres connection (non-secret half; FLUXER_POSTGRES_PASSWORD is
+  # remapped from the wallow-secrets POSTGRES_PASSWORD key in each Deployment) ---
+  FLUXER_DATABASE_BACKEND: "postgres"
+  FLUXER_POSTGRES_HOST: "postgres"
+  FLUXER_POSTGRES_PORT: "5432"
+  FLUXER_POSTGRES_DATABASE: "fluxer"
+  FLUXER_POSTGRES_USERNAME: "fluxer"
+  FLUXER_POSTGRES_SSL: "false"
+  FLUXER_POSTGRES_PREPARED_STATEMENTS: "true"
+
+  # --- Core / general ---
+  FLUXER_ENV: "production"
+  NODE_ENV: "production"
+  LOG_LEVEL: "info"
+  FLUXER_SELF_HOSTED: "true"
+  FLUXER_BASE_DOMAIN: "wallow.local"
+  FLUXER_PUBLIC_SCHEME: "http"
+  FLUXER_PUBLIC_PORT: "80"
+  FLUXER_PUBLIC_ORIGIN: "http://wallow.local"
+  FLUXER_TRUST_CLIENT_IP_HEADER: "true"
+  FLUXER_CLIENT_IP_HEADER_NAME: "x-forwarded-for"
+  FLUXER_API_HEADERS_TIMEOUT_MS: "30000"
+  FLUXER_API_REQUEST_TIMEOUT_MS: "120000"
+
+  # --- KV / messaging ---
+  FLUXER_KV_URL: "redis://valkey:6379/0"
+  FLUXER_NATS_URL: "nats://nats:4222"
+  FLUXER_NATS_JETSTREAM_URL: "nats://nats:4222"
+  FLUXER_NATS_AUTH_TOKEN: ""
+  FLUXER_SVC_NATS_URL: "nats://nats:4222"
+  FLUXER_SVC_SHARD_COUNT: "1"
+
+  # --- Search ---
+  FLUXER_SEARCH_ENGINE: "meilisearch"
+  FLUXER_SEARCH_URL: "http://meilisearch:7700"
+
+  # --- Object storage (S3-compatible, SeaweedFS). Access/secret keys are
+  # remapped from the wallow-secrets FLUXER_S3_ACCESS_KEY/FLUXER_S3_SECRET_KEY
+  # keys in each Deployment. ---
+  FLUXER_S3_ENDPOINT: "http://seaweedfs:8333"
+  FLUXER_S3_PUBLIC_ENDPOINT: "http://seaweedfs:8333"
+  FLUXER_S3_REGION: "us-east-1"
+  FLUXER_S3_FORCE_PATH_STYLE: "true"
+  FLUXER_S3_BUCKET_CDN: "fluxer"
+  FLUXER_S3_BUCKET_UPLOADS: "fluxer-uploads"
+  FLUXER_S3_BUCKET_DOWNLOADS: "fluxer-downloads"
+  FLUXER_S3_BUCKET_REPORTS: "fluxer-reports"
+  FLUXER_S3_BUCKET_HARVESTS: "fluxer-harvests"
+  AWS_DEFAULT_REGION: "us-east-1"
+  AWS_EC2_METADATA_DISABLED: "true"
+
+  # --- LiveKit (voice/video). API key/secret remapped from wallow-secrets. ---
+  FLUXER_LIVEKIT_ENABLED: "true"
+  FLUXER_LIVEKIT_INTERNAL_URL: "http://livekit:7880"
+  FLUXER_LIVEKIT_WEBHOOK_URL: "http://api:8080/webhooks/livekit"
+  FLUXER_LIVEKIT_DEFAULT_REGION: '{"id":"default","name":"Default","emoji":"🌍","latitude":0,"longitude":0}'
+  FLUXER_LIVEKIT_URL: "http://wallow.local/livekit"
+
+  FLUXER_KLIPY_API_KEY: ""
+
+  # --- Email (disabled by default, matches .env.example) ---
+  FLUXER_EMAIL_ENABLED: "false"
+  FLUXER_EMAIL_PROVIDER: "none"
+  FLUXER_EMAIL_FROM_EMAIL: "noreply@wallow.local"
+  FLUXER_EMAIL_FROM_NAME: "Fluxer"
+  FLUXER_EMAIL_APP_BASE_URL: ""
+  FLUXER_EMAIL_SMTP_HOST: ""
+  FLUXER_EMAIL_SMTP_PORT: "587"
+  FLUXER_EMAIL_SMTP_USERNAME: ""
+  FLUXER_EMAIL_SMTP_PASSWORD: ""
+  FLUXER_EMAIL_SMTP_SECURE: "true"
+
+  # --- Optional systems, all off for a personal instance ---
+  FLUXER_SMS_ENABLED: "false"
+  FLUXER_CAPTCHA_ENABLED: "false"
+  FLUXER_CAPTCHA_PROVIDER: "none"
+  FLUXER_CAPTCHA_HCAPTCHA_SITE_KEY: ""
+  FLUXER_CAPTCHA_HCAPTCHA_SECRET_KEY: ""
+  FLUXER_CAPTCHA_TURNSTILE_SITE_KEY: ""
+  FLUXER_CAPTCHA_TURNSTILE_SECRET_KEY: ""
+  FLUXER_STRIPE_ENABLED: "false"
+  FLUXER_NCMEC_ENABLED: "false"
+  FLUXER_CLAMAV_ENABLED: "false"
+  FLUXER_DISCOVERY_ENABLED: "true"
+
+  # --- Auth / crypto knobs that are not themselves secret values ---
+  FLUXER_SSO_ALLOW_PRIVATE_ADDRESSES: "false"
+  FLUXER_VAPID_EMAIL: "admin@wallow.local"
+  FLUXER_PASSKEY_RP_ID: "wallow.local"
+  FLUXER_PASSKEY_RP_NAME: "Fluxer"
+  FLUXER_PASSKEY_ADDITIONAL_ALLOWED_ORIGINS: "http://wallow.local"
+
+  # --- Internal service-to-service endpoints ---
+  FLUXER_INTERNAL_API_ENDPOINT: "http://api:8080"
+  FLUXER_INTERNAL_GATEWAY_ENDPOINT: "http://gateway:8080"
+  FLUXER_INTERNAL_MEDIA_PROXY_ENDPOINT: "http://media-proxy:8080"
+  FLUXER_MARKETING_ENDPOINT: "http://wallow.local"
+  FLUXER_MEDIA_PROXY_ENDPOINT: "http://media-proxy:8080"
+  FLUXER_MEDIA_ENDPOINT: "http://wallow.local/media"
+  FLUXER_MEDIA_PROXY_UPLOAD_RELAY_ENDPOINT: "http://wallow.local/media"
