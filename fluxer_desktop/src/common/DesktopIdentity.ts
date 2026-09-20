@@ -2,12 +2,12 @@
 
 import {BUILD_CHANNEL} from '@electron/common/BuildChannel';
 
-export const DESKTOP_APP_NAME = BUILD_CHANNEL === 'canary' ? 'Fluxer Canary' : 'Fluxer';
-export const MACOS_BUNDLE_ID = BUILD_CHANNEL === 'canary' ? 'app.fluxer.canary' : 'app.fluxer';
-export const LINUX_DESKTOP_ENTRY_ID = BUILD_CHANNEL === 'canary' ? 'fluxer-canary' : 'fluxer';
-export const WINDOWS_SHORTCUT_AUTHOR = 'Fluxer Platform AB';
-const WINDOWS_VELOPACK_ID = BUILD_CHANNEL === 'canary' ? 'fluxer_desktop_canary' : 'fluxer_desktop';
-export const WINDOWS_APP_USER_MODEL_ID = BUILD_CHANNEL === 'canary' ? 'Fluxer.Fluxer.Canary' : 'Fluxer.Fluxer';
+export const DESKTOP_APP_NAME = BUILD_CHANNEL === 'canary' ? 'Wallow Canary' : 'Wallow';
+export const MACOS_BUNDLE_ID = BUILD_CHANNEL === 'canary' ? 'app.wallow.canary' : 'app.wallow';
+export const LINUX_DESKTOP_ENTRY_ID = BUILD_CHANNEL === 'canary' ? 'wallow-canary' : 'wallow';
+export const WINDOWS_SHORTCUT_AUTHOR = 'Wallow';
+const WINDOWS_VELOPACK_ID = BUILD_CHANNEL === 'canary' ? 'wallow_desktop_canary' : 'wallow_desktop';
+export const WINDOWS_APP_USER_MODEL_ID = BUILD_CHANNEL === 'canary' ? 'Wallow.Wallow.Canary' : 'Wallow.Wallow';
 export const WINDOWS_LEGACY_APP_USER_MODEL_IDS = [`velopack.${WINDOWS_VELOPACK_ID}`];
 export const WINDOWS_TOAST_ACTIVATOR_CLSID =
-	BUILD_CHANNEL === 'canary' ? '{9CEDB5C0-3552-43B0-A279-2232E0CDF74C}' : '{48EEF21B-F3AE-431E-8CF2-386FFB2143F2}';
+	BUILD_CHANNEL === 'canary' ? '{A828023C-6E65-4B18-9B8A-83E712FF3DA9}' : '{BEAD2B4F-3121-42D8-9628-C200779C1E79}';

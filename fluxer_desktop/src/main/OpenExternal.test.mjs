@@ -55,11 +55,11 @@ describe('OpenExternal URL validation', () => {
 	test('allows standard and custom external protocols', () => {
 		const {shouldOpenExternalUrl} = loadOpenExternal();
 
-		assert.equal(shouldOpenExternalUrl('https://fluxer.app'), true);
-		assert.equal(shouldOpenExternalUrl('http://fluxer.app'), true);
-		assert.equal(shouldOpenExternalUrl('mailto:support@fluxer.app'), true);
+		assert.equal(shouldOpenExternalUrl('https://wallow.local'), true);
+		assert.equal(shouldOpenExternalUrl('http://wallow.local'), true);
+		assert.equal(shouldOpenExternalUrl('mailto:support@wallow.local'), true);
 		assert.equal(shouldOpenExternalUrl('tel:+15551234567'), true);
-		assert.equal(shouldOpenExternalUrl('fluxer://invite/test'), true);
+		assert.equal(shouldOpenExternalUrl('wallow://invite/test'), true);
 	});
 
 	test('blocks dangerous or malformed external URLs', () => {

@@ -14,14 +14,14 @@ import {getDesktopInfo} from '@electron/main/PlatformInfo';
 import {app} from 'electron';
 import log from 'electron-log';
 
-const DEBUG_INFO_ARGS = new Set(['--fluxer-debug-info', '--fluxer-client-info', '--client-info']);
-const DISABLE_HARDWARE_ACCELERATION_ARGS = new Set(['--fluxer-disable-gpu', '--fluxer-disable-hardware-acceleration']);
-const OPEN_DEVTOOLS_ARGS = new Set(['--fluxer-devtools', '--fluxer-open-devtools']);
-const RESET_WINDOW_STATE_ARGS = new Set(['--fluxer-reset-window-state']);
-const SAFE_MODE_ARGS = new Set(['--fluxer-safe-mode']);
-const RENDERER_CONSOLE_LOG_ARGS = new Set(['--fluxer-log-renderer-console']);
-const NET_LOG_ARGS = new Set(['--fluxer-net-log']);
-const APP_URL_ARGS = new Set(['--fluxer-app-url']);
+const DEBUG_INFO_ARGS = new Set(['--wallow-debug-info', '--wallow-client-info', '--client-info']);
+const DISABLE_HARDWARE_ACCELERATION_ARGS = new Set(['--wallow-disable-gpu', '--wallow-disable-hardware-acceleration']);
+const OPEN_DEVTOOLS_ARGS = new Set(['--wallow-devtools', '--wallow-open-devtools']);
+const RESET_WINDOW_STATE_ARGS = new Set(['--wallow-reset-window-state']);
+const SAFE_MODE_ARGS = new Set(['--wallow-safe-mode']);
+const RENDERER_CONSOLE_LOG_ARGS = new Set(['--wallow-log-renderer-console']);
+const NET_LOG_ARGS = new Set(['--wallow-net-log']);
+const APP_URL_ARGS = new Set(['--wallow-app-url']);
 
 interface DesktopDebugInfo {
 	clientInfo: string;
@@ -116,12 +116,12 @@ export function getLaunchAppUrlOverride(argv: ReadonlyArray<string>): string | n
 	}
 	const trimmed = value.trim();
 	if (!trimmed) {
-		throw new Error('--fluxer-app-url requires a URL');
+		throw new Error('--wallow-app-url requires a URL');
 	}
 	const candidate = /^[a-zA-Z][a-zA-Z0-9+\-.]*:\/\//.test(trimmed) ? trimmed : `https://${trimmed}`;
 	const url = new URL(candidate);
 	if (url.protocol !== 'https:' && url.protocol !== 'http:') {
-		throw new Error('--fluxer-app-url must use http or https');
+		throw new Error('--wallow-app-url must use http or https');
 	}
 	return url.toString();
 }
@@ -156,11 +156,11 @@ function getLogFilePath(): string | null {
 }
 
 function sanitizeLaunchArg(arg: string): string {
-	if (/^fluxer:\/\//i.test(arg)) {
-		return 'fluxer://<redacted>';
+	if (/^wallow:\/\//i.test(arg)) {
+		return 'wallow://<redacted>';
 	}
-	if (arg.startsWith('--fluxer-app-url=')) {
-		return `--fluxer-app-url=${sanitizeUrlForDiagnostics(arg.slice('--fluxer-app-url='.length))}`;
+	if (arg.startsWith('--wallow-app-url=')) {
+		return `--wallow-app-url=${sanitizeUrlForDiagnostics(arg.slice('--wallow-app-url='.length))}`;
 	}
 	if (/^(--[^=]*(?:token|secret|password|key|code)[^=]*)=/i.test(arg)) {
 		return `${arg.slice(0, arg.indexOf('='))}=<redacted>`;
@@ -172,7 +172,7 @@ function sanitizeLaunchArgs(argv: ReadonlyArray<string>): Array<string> {
 	const sanitized: Array<string> = [];
 	for (let index = 0; index < argv.length; index += 1) {
 		const arg = argv[index];
-		if (arg === '--fluxer-app-url') {
+		if (arg === '--wallow-app-url') {
 			sanitized.push(arg);
 			const next = argv[index + 1];
 			if (next && !next.startsWith('--')) {
@@ -327,7 +327,7 @@ function formatWindowBehavior(settings: DesktopWindowBehaviorSettings): string {
 
 export function formatDesktopDebugInfo(info: DesktopDebugInfo): string {
 	return [
-		'Fluxer desktop debug info',
+		'Wallow desktop debug info',
 		info.clientInfo,
 		`App URL: ${info.appUrl}`,
 		`Custom app URL: ${info.customAppUrl ?? '(none)'}`,

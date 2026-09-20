@@ -108,7 +108,7 @@ function collectOwnWindowMediaSourceIds(): Set<string> {
 			}
 		}
 	} catch (error) {
-		log.debug('[DisplayMedia] Failed to enumerate Fluxer windows for own-source detection', {error});
+		log.debug('[DisplayMedia] Failed to enumerate Wallow windows for own-source detection', {error});
 	}
 	return ids;
 }

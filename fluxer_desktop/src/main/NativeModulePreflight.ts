@@ -383,5 +383,5 @@ export function runNativeModulePreflight(): void {
 	}
 	clearPreflightMarker();
 	const details = failures.map(formatNativeModulePreflightFailure).join('\n');
-	throw new Error(`Fluxer native module preflight failed on ${process.platform}/${process.arch}.\n${details}`);
+	throw new Error(`Wallow native module preflight failed on ${process.platform}/${process.arch}.\n${details}`);
 }

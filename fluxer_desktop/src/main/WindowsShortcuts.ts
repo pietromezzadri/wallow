@@ -61,7 +61,7 @@ function getWindowsShortcutRepairPaths(): WindowsShortcutRepairPaths | null {
 	};
 }
 
-function isInFluxerRoot(candidate: string, rootDir: string): boolean {
+function isInWallowRoot(candidate: string, rootDir: string): boolean {
 	if (!candidate) return false;
 	let fullPath: string;
 	try {
@@ -118,11 +118,11 @@ async function repairOneShortcut(
 	if (!fs.existsSync(shortcutPath)) return;
 	const rootDir = path.resolve(repair.rootAppDir);
 	const alreadyCurrent = lnkContainsString(shortcutPath, repair.currentExe);
-	const pointsAtFluxer = lnkContainsString(shortcutPath, rootDir) || isInFluxerRoot(shortcutPath, rootDir);
+	const pointsAtWallow = lnkContainsString(shortcutPath, rootDir) || isInWallowRoot(shortcutPath, rootDir);
 	const hasLegacyAumid = WINDOWS_LEGACY_APP_USER_MODEL_IDS.some((legacyAumid) =>
 		lnkContainsString(shortcutPath, legacyAumid),
 	);
-	if (!pointsAtFluxer) return;
+	if (!pointsAtWallow) return;
 	if (alreadyCurrent && !hasLegacyAumid) return;
 	try {
 		await createShortcut({
@@ -170,6 +170,6 @@ export function repairWindowsShortcuts(): void {
 	const repairPaths = getWindowsShortcutRepairPaths();
 	if (!repairPaths) return;
 	repairWindowsShortcutsAsync(repairPaths).catch((error) => {
-		console.warn('[WindowsShortcuts] Failed to repair Fluxer shortcuts', error);
+		console.warn('[WindowsShortcuts] Failed to repair Wallow shortcuts', error);
 	});
 }

@@ -69,14 +69,14 @@ export function removeFluxerVulkanLayerRegistrations(): void {
 			try {
 				deleteVulkanLayerRegistryValue(root, valueName);
 			} catch (error) {
-				log.warn('[VulkanLayerCleanup] Failed to remove Fluxer Vulkan layer registry value', {
+				log.warn('[VulkanLayerCleanup] Failed to remove Wallow Vulkan layer registry value', {
 					root,
 					valueName,
 					error,
 				});
 				continue;
 			}
-			log.info('[VulkanLayerCleanup] Removed Fluxer Vulkan layer registry value', {root, valueName});
+			log.info('[VulkanLayerCleanup] Removed Wallow Vulkan layer registry value', {root, valueName});
 		}
 	}
 }

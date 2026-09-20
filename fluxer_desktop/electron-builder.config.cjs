@@ -7,12 +7,12 @@ const os = require('node:os');
 const path = require('node:path');
 const {promisify} = require('node:util');
 const execFileAsync = promisify(execFile);
-const productName = isCanary ? 'Fluxer Canary' : 'Fluxer';
-const artifactProductName = isCanary ? 'Fluxer-Canary' : 'Fluxer';
-const appId = isCanary ? 'app.fluxer.canary' : 'app.fluxer';
+const productName = isCanary ? 'Wallow Canary' : 'Wallow';
+const artifactProductName = isCanary ? 'Wallow-Canary' : 'Wallow';
+const appId = isCanary ? 'app.wallow.canary' : 'app.wallow';
 const iconDir = isCanary ? 'icons-canary' : 'icons-stable';
-const packageName = isCanary ? 'fluxer_desktop_canary' : 'fluxer_desktop';
-const linuxPackageName = isCanary ? 'fluxer-canary' : 'fluxer';
+const packageName = isCanary ? 'wallow_desktop_canary' : 'wallow_desktop';
+const linuxPackageName = isCanary ? 'wallow-canary' : 'wallow';
 const linuxDesktopActionIds = ['open-settings', 'new-dm'];
 const linuxDesktopActionList = `${linuxDesktopActionIds.join(';')};`;
 const linuxGlibcBaseline = Object.freeze({major: 2, minor: 35, patch: 0, name: 'GLIBC_2.35'});
@@ -315,13 +315,13 @@ const platformRuntimeDependencyExcludes =
 const linuxDesktopEntry = {
 	Name: productName,
 	GenericName: 'Instant Messenger',
-	Comment: isCanary ? 'Canary build of Fluxer' : 'Instant messaging and VoIP',
+	Comment: isCanary ? 'Canary build of Wallow' : 'Instant messaging and VoIP',
 	Keywords: 'chat;im;messaging;messenger;voip;voice;video;call;',
 	Categories: 'Network;InstantMessaging;Chat;',
 	StartupWMClass: linuxPackageName,
 	StartupNotify: 'true',
 	SingleMainWindow: 'true',
-	MimeType: 'x-scheme-handler/fluxer;',
+	MimeType: 'x-scheme-handler/wallow;',
 	'X-GNOME-UsesNotifications': 'true',
 };
 const linuxDesktopEntryWithActions = {
@@ -1266,7 +1266,7 @@ async function verifyLinuxArtifactContracts(buildResult) {
 module.exports = {
 	appId,
 	productName,
-	copyright: 'Copyright © 2026 Fluxer Platform AB',
+	copyright: 'Copyright © 2026 Wallow',
 	artifactName: `${artifactProductName}-\${version}-\${os}-\${arch}.\${ext}`,
 	directories: {
 		buildResources: 'build_resources',
@@ -1379,7 +1379,7 @@ module.exports = {
 		{
 			name: appId,
 			role: 'Viewer',
-			schemes: ['fluxer'],
+			schemes: ['wallow'],
 		},
 	],
 	beforePack: verifyNativePackageInputs,
@@ -1416,11 +1416,11 @@ module.exports = {
 			},
 		],
 		extendInfo: {
-			NSMicrophoneUsageDescription: 'Fluxer needs access to your microphone to enable voice chat features.',
-			NSCameraUsageDescription: 'Fluxer needs access to your camera to enable video chat features.',
-			NSAppleEventsUsageDescription: 'Fluxer needs access to Apple Events for automation features.',
-			NSAudioCaptureUsageDescription: 'Fluxer captures audio from the screen or window you choose to share.',
-			NSScreenCaptureUsageDescription: 'Fluxer captures the screen or window you choose to share.',
+			NSMicrophoneUsageDescription: 'Wallow needs access to your microphone to enable voice chat features.',
+			NSCameraUsageDescription: 'Wallow needs access to your camera to enable video chat features.',
+			NSAppleEventsUsageDescription: 'Wallow needs access to Apple Events for automation features.',
+			NSAudioCaptureUsageDescription: 'Wallow captures audio from the screen or window you choose to share.',
+			NSScreenCaptureUsageDescription: 'Wallow captures the screen or window you choose to share.',
 		},
 	},
 	dmg: {

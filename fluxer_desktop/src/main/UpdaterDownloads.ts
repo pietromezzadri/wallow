@@ -77,7 +77,7 @@ function buildManualVersionDownloadUrl(version: string, format: ManualDesktopFor
 }
 
 function getArtifactProductName(): string {
-	return BUILD_CHANNEL === 'canary' ? 'Fluxer-Canary' : 'Fluxer';
+	return BUILD_CHANNEL === 'canary' ? 'Wallow-Canary' : 'Wallow';
 }
 
 function getManualUpdateSuggestedName(format: LinuxManualDesktopFormat, version: string): string {

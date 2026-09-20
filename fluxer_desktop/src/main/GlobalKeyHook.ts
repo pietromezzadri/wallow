@@ -669,7 +669,7 @@ function linuxUaccessGrantScript(): string {
 		'target_user="$1"',
 		'install -d -m 0755 /etc/udev/rules.d',
 		"cat > /etc/udev/rules.d/70-fluxer-input.rules <<'EOF'",
-		'# Grants the active local desktop user access to input devices for Fluxer system-wide shortcuts.',
+		'# Grants the active local desktop user access to input devices for Wallow system-wide shortcuts.',
 		'KERNEL=="event*", SUBSYSTEM=="input", TAG+="uaccess"',
 		'EOF',
 		'if command -v udevadm >/dev/null 2>&1; then',

@@ -153,7 +153,7 @@ try {
 }
 
 if (launchConfigurationError) {
-	console.error(`Fluxer desktop launch configuration error: ${launchConfigurationError.message}`);
+	console.error(`Wallow desktop launch configuration error: ${launchConfigurationError.message}`);
 	log.error('Launch configuration error:', launchConfigurationError);
 	app.exit(1);
 } else if (hasDesktopDebugInfoArg(process.argv)) {
@@ -167,7 +167,7 @@ if (launchConfigurationError) {
 		.catch((error: unknown) => {
 			const message = error instanceof Error ? error.message : String(error);
 			log.error('Failed to collect desktop debug info:', error);
-			writeCliAndExit(process.stderr, `Failed to collect Fluxer desktop debug info: ${message}`, 1);
+			writeCliAndExit(process.stderr, `Failed to collect Wallow desktop debug info: ${message}`, 1);
 		});
 } else {
 	if (shouldResetWindowStateOnLaunch(process.argv)) {

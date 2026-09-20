@@ -2,8 +2,8 @@
 
 const HTTP_PREFIX = 'http://';
 const HTTPS_PREFIX = 'https://';
-const APP_PROTOCOL_SCHEME = 'fluxer:';
-const APP_PROTOCOL_PREFIX = 'fluxer://';
+const APP_PROTOCOL_SCHEME = 'wallow:';
+const APP_PROTOCOL_PREFIX = 'wallow://';
 const WORD_CHARS = new Set('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_');
 const ESCAPABLE_CHARS = new Set('[]()\\*_~`@#-|:<>');
 const URL_TERMINATION_CHARS = new Set(' \t\n\r)"');
