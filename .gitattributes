@@ -8,3 +8,9 @@ packages/fonts/files/** -text -diff
 # "bash\r: No such file or directory", which breaks any Docker build or CI
 # step that copies these scripts from a Windows checkout.
 *.sh text eol=lf
+
+# fluxer_app's build has scripts that do literal-substring matching against
+# these files' raw contents (see GenerateThemeVariables.ts's skeleton-surface
+# invariant checks) using LF-only search strings. A CRLF checkout makes those
+# substring checks fail even though the file content is otherwise identical.
+fluxer_app/src/**/*.css text eol=lf
