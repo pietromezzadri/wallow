@@ -96,6 +96,15 @@ spec:
     spec:
       hostNetwork: true
       dnsPolicy: ClusterFirstWithHostNet
+      # Kubernetes auto-injects a `<SVCNAME>_PORT=tcp://<clusterIP>:<port>`
+      # env var into every pod for every Service that exists in the namespace
+      # at pod start. Since the Service here is named "livekit" and
+      # livekit-server itself binds config flags to LIVEKIT_-prefixed env
+      # vars (LIVEKIT_PORT -> --port), the injected value collides with and
+      # overrides livekit-server's own port config, and it crashes trying to
+      # parse "tcp://10.x.x.x:7880" as a plain port number. Disabling the
+      # injection avoids the collision.
+      enableServiceLinks: false
       containers:
         - name: livekit
           image: livekit/livekit-server:v1.12.0

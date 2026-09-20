@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Generates real random values for every key in 02-secrets-template.yaml and
+# Generates real random values for every key in 02-secrets-template.yaml.example and
 # applies them directly to the cluster as the wallow-secrets Secret. Never
 # writes a real secret value to a file on disk -- everything lives in shell
 # variables for the lifetime of this process only, and is piped straight into

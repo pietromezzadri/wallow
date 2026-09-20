@@ -40,7 +40,14 @@ spec:
       containers:
         - name: postgres
           image: postgres:16-alpine
-          command:
+          # NOTE: this is `args:`, not `command:` -- a k8s `command:` overrides
+          # the image's ENTRYPOINT (docker-entrypoint.sh, which drops from root
+          # to the postgres user before exec'ing postgres itself). Docker
+          # Compose's `command:` only overrides CMD, so the compose version of
+          # this same block was always safe; the literal field-name translation
+          # to k8s `command:` silently skipped the privilege drop and made
+          # postgres refuse to start as root.
+          args:
             - postgres
             - -c
             - max_connections=100

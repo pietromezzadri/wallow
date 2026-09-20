@@ -89,18 +89,21 @@ spec:
               value: "2"
             - name: FLUXER_ERLANG_SCHEDULERS_MAX
               value: "16"
+          # NOTE: httpGet probes are issued by kubelet against the pod IP, which
+          # sends a Host header the gateway's host-validation rejects (403) --
+          # the compose healthcheck ran curl from inside the container against
+          # 127.0.0.1 instead (test: curl -fsS http://127.0.0.1:8080/_health/ready),
+          # so an exec probe reproducing that exactly is what actually works.
           readinessProbe:
-            httpGet:
-              path: /_health/ready
-              port: 8080
+            exec:
+              command: ["curl", "-fsS", "-o", "/dev/null", "http://127.0.0.1:8080/_health/ready"]
             initialDelaySeconds: 30
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 30
           livenessProbe:
-            httpGet:
-              path: /_health/ready
-              port: 8080
+            exec:
+              command: ["curl", "-fsS", "-o", "/dev/null", "http://127.0.0.1:8080/_health/ready"]
             initialDelaySeconds: 60
             periodSeconds: 10
             timeoutSeconds: 5
