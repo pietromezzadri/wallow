@@ -477,7 +477,7 @@ export default () => {
 								reuseExistingChunk: true,
 							},
 							highlight: {
-								test: /[\\/]node_modules[\\/](@arborium[\\/]arborium[\\/]|\.pnpm[\\/]@arborium\+arborium@)/,
+								test: /[\\/]node_modules[\\/]@arborium[\\/]arborium[\\/]/,
 								name: 'highlight',
 								priority: 55,
 								reuseExistingChunk: true,
@@ -580,7 +580,6 @@ export default () => {
 									if (!module.resource) return false;
 									if (!/[\\/]node_modules[\\/]/.test(module.resource)) return false;
 									if (/[\\/](@arborium|@phosphor-icons|katex)[\\/]/.test(module.resource)) return false;
-									if (/[\\/]\.pnpm[\\/]@arborium\+/.test(module.resource)) return false;
 									return true;
 								},
 								name: 'vendor',

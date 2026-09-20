@@ -15,7 +15,7 @@ ARG PUBLIC_ASSET_BASE_URL
 
 WORKDIR /usr/src/app
 
-RUN corepack enable && corepack prepare pnpm@10.29.3 --activate
+COPY --from=oven/bun:1.4.2 /usr/local/bin/bun /usr/local/bin/bun
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
 	curl ca-certificates build-essential clang \
@@ -32,7 +32,7 @@ RUN set -eux; \
 	rustc --version; cargo --version
 
 
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY package.json bun.lock bunfig.toml ./
 COPY patches/ ./patches/
 COPY fluxer_app/package.json ./fluxer_app/
 COPY packages/constants/package.json ./packages/constants/
@@ -47,7 +47,7 @@ COPY fluxer_app/pkgs/list_utils/package.json ./fluxer_app/pkgs/list_utils/
 COPY fluxer_app/pkgs/number_utils/package.json ./fluxer_app/pkgs/number_utils/
 COPY fluxer_app/pkgs/livekit-client/package.json ./fluxer_app/pkgs/livekit-client/
 
-RUN pnpm install --frozen-lockfile --filter fluxer_app...
+RUN bun install --frozen-lockfile
 
 COPY tsconfigs ./tsconfigs
 COPY packages/constants/ ./packages/constants/
@@ -79,7 +79,7 @@ ENV BUILD_VERSION=${BUILD_VERSION} \
 
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
 	--mount=type=cache,target=/usr/local/cargo/git \
-	cd fluxer_app && pnpm build
+	cd fluxer_app && bun run build
 
 # ---------- Stage 2: The one canonical asset tree every architecture serves ----------
 # Stage for CI to extract the full dist (docker bake app-dist target)

@@ -42,24 +42,28 @@ fn default_test_nats_url() -> String {
 }
 
 fn run_generators(for_typecheck: bool) -> Result<()> {
-    task_run(&["pnpm", "--filter", "@fluxer/schema", "generate"])?;
+    task_run(&["bun", "--filter", "@fluxer/schema", "generate"])?;
     if for_typecheck {
-        return task_run(&["pnpm", "--filter", "@fluxer/i18n", "generate:types"]);
+        return task_run(&["bun", "--filter", "@fluxer/i18n", "generate:types"]);
     }
-    task_run(&["pnpm", "--filter", "fluxer_app", "i18n:compile"])
+    task_run(&["bun", "--filter", "fluxer_app", "i18n:compile"])
 }
 
 pub fn run_typecheck() -> Result<i32> {
     run_generators(true)?;
-    task_run(&["pnpm", "-r", "--if-present", "typecheck"])?;
+    task_run(&["bun", "--filter", "*", "--if-present", "typecheck"])?;
     Ok(0)
 }
 
 pub fn run_test() -> Result<i32> {
     run_generators(false)?;
-    let mut args = vec!["pnpm".to_owned(), "-r".to_owned()];
-    if let Ok(concurrency) = env::var("PNPM_TEST_WORKSPACE_CONCURRENCY") {
-        args.push(format!("--workspace-concurrency={concurrency}"));
+    let mut args = vec!["bun".to_owned(), "--filter".to_owned(), "*".to_owned()];
+    // Bun has no numeric equivalent of pnpm's `--workspace-concurrency=N`; the closest
+    // safe approximation to bounding parallelism on a constrained CI runner is
+    // `--sequential` (concurrency of 1). We only opt into it when an explicit override
+    // was requested, so local/default runs keep bun's normal full-parallel behavior.
+    if env::var("PNPM_TEST_WORKSPACE_CONCURRENCY").is_ok() {
+        args.push("--sequential".to_owned());
     }
     args.extend(
         [
@@ -91,7 +95,7 @@ pub fn run_test() -> Result<i32> {
         "fluxer_desktop/native/rust/Cargo.toml",
     ])?;
     run_command(
-        &["pnpm", "--filter", "fluxer_api", "test"],
+        &["bun", "--filter", "fluxer_api", "test"],
         RunOptions {
             env,
             load_default_env: false,
@@ -103,20 +107,20 @@ pub fn run_test() -> Result<i32> {
 
 pub fn run_build() -> Result<i32> {
     run_generators(false)?;
-    task_run(&["pnpm", "--filter", "fluxer_app", "build"])?;
+    task_run(&["bun", "--filter", "fluxer_app", "build"])?;
     build_desktop(false)?;
     Ok(0)
 }
 
 pub fn run_lint() -> Result<i32> {
-    task_run(&["pnpm", "exec", "biome", "ci"])?;
-    task_run(&["pnpm", "exec", "eslint", ".", "--max-warnings", "0"])?;
+    task_run(&["bunx", "biome", "ci"])?;
+    task_run(&["bunx", "eslint", ".", "--max-warnings", "0"])?;
     Ok(0)
 }
 
 pub fn run_knip() -> Result<i32> {
-    task_run(&["pnpm", "--filter", "fluxer_app", "i18n:compile"])?;
-    task_run(&["pnpm", "exec", "knip"])?;
+    task_run(&["bun", "--filter", "fluxer_app", "i18n:compile"])?;
+    task_run(&["bunx", "knip"])?;
     Ok(0)
 }
 

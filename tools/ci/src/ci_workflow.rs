@@ -38,7 +38,7 @@ pub async fn run_ci(args: CiArgs) -> Result<()> {
     let root = repo_root()?;
     match args.step {
         CiStep::InstallDependencies => run_command(
-            CommandSpec::new("pnpm")
+            CommandSpec::new("bun")
                 .args(["install", "--frozen-lockfile"])
                 .current_dir(root),
         ),
@@ -46,8 +46,8 @@ pub async fn run_ci(args: CiArgs) -> Result<()> {
             run_generators(&root, true)?;
             run_app_test_artifact_generators(&root, AppWasm::Build)?;
             run_command(
-                CommandSpec::new("pnpm")
-                    .args(["-r", "--if-present", "typecheck"])
+                CommandSpec::new("bun")
+                    .args(["--filter", "*", "--if-present", "typecheck"])
                     .current_dir(root),
             )
         }
@@ -56,7 +56,7 @@ pub async fn run_ci(args: CiArgs) -> Result<()> {
             run_app_test_artifact_generators(&root, AppWasm::ReuseIfPresent)?;
             run_workspace_tests(&root)?;
             run_command(with_test_env(
-                CommandSpec::new("pnpm")
+                CommandSpec::new("bun")
                     .args(["--filter", "fluxer_api", "test"])
                     .current_dir(root),
             ))
@@ -65,11 +65,7 @@ pub async fn run_ci(args: CiArgs) -> Result<()> {
             run_app_test_artifact_generators(&root, AppWasm::ReuseIfPresent)?;
             ensure_desktop_build_channel_file(&root)?;
             run_fluxer_app_script(&root, "i18n:compile")?;
-            run_command(
-                CommandSpec::new("pnpm")
-                    .args(["exec", "knip"])
-                    .current_dir(root),
-            )
+            run_command(CommandSpec::new("bunx").arg("knip").current_dir(root))
         }
         CiStep::GatewayFmt => {
             run_gateway_step(&root.join("fluxer_gateway"), GatewayStep::FmtCheck, "test")
@@ -130,7 +126,7 @@ fn missing_app_wasm_artifact(root: &Path) -> Option<PathBuf> {
 
 fn run_fluxer_app_script(root: &Path, script: &str) -> Result<()> {
     run_command(
-        CommandSpec::new("pnpm")
+        CommandSpec::new("bun")
             .args(["--filter", "fluxer_app", script])
             .current_dir(root),
     )
@@ -145,25 +141,29 @@ fn run_generators(root: &Path, for_typecheck: bool) -> Result<()> {
 
 fn generator_commands(for_typecheck: bool) -> Vec<CommandSpec> {
     let mut commands =
-        vec![CommandSpec::new("pnpm").args(["--filter", "@fluxer/schema", "generate"])];
+        vec![CommandSpec::new("bun").args(["--filter", "@fluxer/schema", "generate"])];
     if for_typecheck {
-        commands.push(CommandSpec::new("pnpm").args([
+        commands.push(CommandSpec::new("bun").args([
             "--filter",
             "@fluxer/i18n",
             "generate:types",
         ]));
     } else {
-        commands.push(CommandSpec::new("pnpm").args(["--filter", "fluxer_app", "i18n:compile"]));
+        commands.push(CommandSpec::new("bun").args(["--filter", "fluxer_app", "i18n:compile"]));
     }
     commands
 }
 
 fn workspace_test_args(concurrency: Option<&str>) -> Vec<OsString> {
-    let mut args = vec![OsString::from("-r")];
-    if let Some(concurrency) = concurrency {
-        args.push(OsString::from(format!(
-            "--workspace-concurrency={concurrency}"
-        )));
+    let mut args = vec![OsString::from("--filter"), OsString::from("*")];
+    // Bun has no numeric equivalent of pnpm's `--workspace-concurrency=N`. When a
+    // concurrency override was requested we fall back to `--sequential` (i.e.
+    // concurrency of 1) as the safest approximation rather than silently ignoring the
+    // request and running every workspace fully in parallel on the CI runner. Bun's own
+    // default (no flag at all) is unbounded parallel, matching pnpm's behavior when no
+    // override is given.
+    if concurrency.is_some() {
+        args.push(OsString::from("--sequential"));
     }
     args.extend(
         [
@@ -185,7 +185,7 @@ fn workspace_test_args(concurrency: Option<&str>) -> Vec<OsString> {
 fn run_workspace_tests(root: &Path) -> Result<()> {
     let concurrency = env::var("PNPM_TEST_WORKSPACE_CONCURRENCY").ok();
     run_command(with_test_env(
-        CommandSpec::new("pnpm")
+        CommandSpec::new("bun")
             .args(workspace_test_args(concurrency.as_deref()))
             .current_dir(root),
     ))
@@ -258,7 +258,7 @@ mod tests {
 
     #[test]
     fn with_test_env_sets_all_nats_urls_and_leaves_worker_counts_to_vitest() {
-        let spec = with_test_env(CommandSpec::new("pnpm"));
+        let spec = with_test_env(CommandSpec::new("bun"));
         let env = spec
             .env
             .into_iter()
@@ -282,15 +282,12 @@ mod tests {
     }
 
     #[test]
-    fn workspace_tests_exclude_desktop_and_leave_concurrency_to_pnpm() {
+    fn workspace_tests_exclude_desktop_and_run_fully_parallel_by_default_with_bun() {
         let args = workspace_test_args(None);
 
-        assert_eq!(args[0], OsString::from("-r"));
-        assert!(
-            !args
-                .iter()
-                .any(|arg| arg.to_string_lossy().starts_with("--workspace-concurrency"))
-        );
+        assert_eq!(args[0], OsString::from("--filter"));
+        assert_eq!(args[1], OsString::from("*"));
+        assert!(!args.iter().any(|arg| arg == &OsString::from("--sequential")));
         assert!(args.windows(2).any(|pair| pair
             == [
                 OsString::from("--filter"),
@@ -299,10 +296,10 @@ mod tests {
     }
 
     #[test]
-    fn workspace_tests_forward_an_explicit_concurrency_override() {
+    fn workspace_tests_request_sequential_execution_when_concurrency_override_is_set() {
         let args = workspace_test_args(Some("4"));
 
-        assert_eq!(args[1], OsString::from("--workspace-concurrency=4"));
+        assert!(args.iter().any(|arg| arg == &OsString::from("--sequential")));
     }
 
     #[test]

@@ -69,11 +69,11 @@ function findInstalledPackageDirs(packageName) {
 		);
 	} catch {}
 	addExistingPackageDir(packageDirs, path.join(ROOT_DIR, 'node_modules', ...packagePathParts));
-	const pnpmRoot = path.join(ROOT_DIR, 'node_modules', '.pnpm');
-	if (fs.existsSync(pnpmRoot)) {
-		for (const entry of fs.readdirSync(pnpmRoot, {withFileTypes: true})) {
+	const bunRoot = path.join(ROOT_DIR, 'node_modules', '.bun');
+	if (fs.existsSync(bunRoot)) {
+		for (const entry of fs.readdirSync(bunRoot, {withFileTypes: true})) {
 			if (!entry.isDirectory()) continue;
-			addExistingPackageDir(packageDirs, path.join(pnpmRoot, entry.name, 'node_modules', ...packagePathParts));
+			addExistingPackageDir(packageDirs, path.join(bunRoot, entry.name, 'node_modules', ...packagePathParts));
 		}
 	}
 	return Array.from(packageDirs.keys());
@@ -400,56 +400,56 @@ function buildNativeAddons() {
 	buildNativeAddon({
 		label: '@fluxer/webauthn',
 		dirName: 'webauthn',
-		commands: [['pnpm', 'build']],
+		commands: [['bun', 'run', 'build']],
 		jsEntry: 'index.js',
 	});
 	buildNativeAddon({
 		label: '@fluxer/hardware-encoder',
 		dirName: 'hardware-encoder',
-		commands: [['pnpm', 'build']],
+		commands: [['bun', 'run', 'build']],
 		jsEntry: 'index.js',
 	});
 	if (process.platform === 'darwin') {
 		buildNativeAddon({
 			label: '@fluxer/mac-app-audio',
 			dirName: 'mac-app-audio',
-			commands: [['pnpm', 'build']],
+			commands: [['bun', 'run', 'build']],
 			jsEntry: 'index.js',
 		});
 		buildNativeAddon({
 			label: '@fluxer/mac-screen-capture',
 			dirName: 'mac-screen-capture',
-			commands: [['pnpm', 'build']],
+			commands: [['bun', 'run', 'build']],
 			jsEntry: 'index.js',
 		});
 		buildNativeAddon({
 			label: '@fluxer/mac-clipboard',
 			dirName: 'mac-clipboard',
-			commands: [['pnpm', 'build']],
+			commands: [['bun', 'run', 'build']],
 			jsEntry: 'index.js',
 		});
 		buildNativeAddon({
 			label: '@fluxer/mac-sysctl',
 			dirName: 'mac-sysctl',
-			commands: [['pnpm', 'build']],
+			commands: [['bun', 'run', 'build']],
 			jsEntry: 'index.js',
 		});
 		buildNativeAddon({
 			label: '@fluxer/mac-tcc',
 			dirName: 'mac-tcc',
-			commands: [['pnpm', 'build']],
+			commands: [['bun', 'run', 'build']],
 			jsEntry: 'index.js',
 		});
 		buildNativeAddon({
 			label: '@fluxer/macos-input-hook',
 			dirName: 'macos-input-hook',
-			commands: [['pnpm', 'build']],
+			commands: [['bun', 'run', 'build']],
 			jsEntry: 'index.js',
 		});
 		buildNativeAddon({
 			label: '@fluxer/platform-info',
 			dirName: 'platform-info',
-			commands: [['pnpm', 'build']],
+			commands: [['bun', 'run', 'build']],
 			jsEntry: 'index.js',
 		});
 		verifyInstalledNativeArtifacts();
@@ -459,43 +459,43 @@ function buildNativeAddons() {
 		buildNativeAddon({
 			label: '@fluxer/win-process-loopback',
 			dirName: 'win-process-loopback',
-			commands: [['pnpm', 'build']],
+			commands: [['bun', 'run', 'build']],
 			jsEntry: 'index.js',
 		});
 		buildNativeAddon({
 			label: '@fluxer/win-clipboard',
 			dirName: 'win-clipboard',
-			commands: [['pnpm', 'build']],
+			commands: [['bun', 'run', 'build']],
 			jsEntry: 'index.js',
 		});
 		buildNativeAddon({
 			label: '@fluxer/win-shell',
 			dirName: 'win-shell',
-			commands: [['pnpm', 'build']],
+			commands: [['bun', 'run', 'build']],
 			jsEntry: 'index.js',
 		});
 		buildNativeAddon({
 			label: '@fluxer/win-toast',
 			dirName: 'win-toast',
-			commands: [['pnpm', 'build']],
+			commands: [['bun', 'run', 'build']],
 			jsEntry: 'index.js',
 		});
 		buildNativeAddon({
 			label: '@fluxer/windows-input-hook',
 			dirName: 'windows-input-hook',
-			commands: [['pnpm', 'build']],
+			commands: [['bun', 'run', 'build']],
 			jsEntry: 'index.js',
 		});
 		buildNativeAddon({
 			label: '@fluxer/win-game-capture',
 			dirName: 'win-game-capture',
-			commands: [['pnpm', 'build']],
+			commands: [['bun', 'run', 'build']],
 			jsEntry: 'index.js',
 		});
 		buildNativeAddon({
 			label: '@fluxer/platform-info',
 			dirName: 'platform-info',
-			commands: [['pnpm', 'build']],
+			commands: [['bun', 'run', 'build']],
 			jsEntry: 'index.js',
 		});
 		verifyInstalledNativeArtifacts();
@@ -505,49 +505,49 @@ function buildNativeAddons() {
 		buildNativeAddon({
 			label: '@fluxer/linux-audio-capture',
 			dirName: 'linux-audio-capture',
-			commands: [['pnpm', 'build']],
+			commands: [['bun', 'run', 'build']],
 			jsEntry: 'index.js',
 		});
 		buildNativeAddon({
 			label: '@fluxer/linux-screen-capture',
 			dirName: 'linux-screen-capture',
-			commands: [['pnpm', 'build']],
+			commands: [['bun', 'run', 'build']],
 			jsEntry: 'index.js',
 		});
 		buildNativeAddon({
 			label: '@fluxer/linux-portals',
 			dirName: 'linux-portals',
-			commands: [['pnpm', 'build']],
+			commands: [['bun', 'run', 'build']],
 			jsEntry: 'index.js',
 		});
 		buildNativeAddon({
 			label: '@fluxer/linux-notifications',
 			dirName: 'linux-notifications',
-			commands: [['pnpm', 'build']],
+			commands: [['bun', 'run', 'build']],
 			jsEntry: 'index.js',
 		});
 		buildNativeAddon({
 			label: '@fluxer/linux-evdev',
 			dirName: 'linux-evdev',
-			commands: [['pnpm', 'build']],
+			commands: [['bun', 'run', 'build']],
 			jsEntry: 'index.js',
 		});
 		buildNativeAddon({
 			label: '@fluxer/system-hunspell',
 			dirName: 'system-hunspell',
-			commands: [['pnpm', 'build']],
+			commands: [['bun', 'run', 'build']],
 			jsEntry: 'index.js',
 		});
 		buildNativeAddon({
 			label: '@fluxer/linux-input-hook',
 			dirName: 'linux-input-hook',
-			commands: [['pnpm', 'build']],
+			commands: [['bun', 'run', 'build']],
 			jsEntry: 'index.js',
 		});
 		buildNativeAddon({
 			label: '@fluxer/platform-info',
 			dirName: 'platform-info',
-			commands: [['pnpm', 'build']],
+			commands: [['bun', 'run', 'build']],
 			jsEntry: 'index.js',
 		});
 		verifyInstalledNativeArtifacts();

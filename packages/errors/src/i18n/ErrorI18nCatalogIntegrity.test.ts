@@ -12,8 +12,8 @@ import {parse, type Token} from '@messageformat/parser';
 import {describe, expect, it} from 'vitest';
 
 const WEBLATE_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), 'weblate');
-const SOURCE_SYNC_COMMAND = 'pnpm i18n:source-sync';
-const COMPILE_COMMAND = 'pnpm i18n:compile';
+const SOURCE_SYNC_COMMAND = 'bun run i18n:source-sync';
+const COMPILE_COMMAND = 'bun run i18n:compile';
 
 const ENGLISH_VARIANT_LOCALES = new Set<string>(['en-GB']);
 

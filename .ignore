@@ -1,5 +1,5 @@
 **/Cargo.lock
-**/pnpm-lock.yaml
+**/bun.lock
 **/rebar.lock
 
 /fluxer_static/

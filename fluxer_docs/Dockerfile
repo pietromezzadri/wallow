@@ -3,11 +3,11 @@ ARG BUILD_VERSION
 
 FROM node:24-bookworm-slim AS base
 
+COPY --from=oven/bun:1.4.2 /usr/local/bin/bun /usr/local/bin/bun
+
 WORKDIR /usr/src/app
 
-RUN corepack enable && corepack prepare pnpm@10.29.3 --activate
-
-FROM base AS deploy
+FROM base AS build
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
 		build-essential \
@@ -19,9 +19,24 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY . .
 
-RUN pnpm install --frozen-lockfile
-RUN pnpm --filter fluxer_docs run build
-RUN pnpm deploy --legacy --filter=fluxer_docs --prod --config.allowUnusedPatches=true /out
+RUN bun install --frozen-lockfile
+RUN bun --filter fluxer_docs run build
+
+# bun has no equivalent of `pnpm deploy --prod`; see fluxer_api/Dockerfile for why
+# this is a second, isolated install pass rather than pruning in place.
+FROM base AS prod-deps
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+		build-essential \
+		gcc \
+		libvips-dev \
+		pkg-config \
+		python3 && \
+	rm -rf /var/lib/apt/lists/*
+
+COPY . .
+
+RUN bun install --frozen-lockfile --production
 
 FROM node:24-bookworm-slim
 
@@ -29,14 +44,14 @@ ARG BUILD_VERSION=""
 ARG SOURCE_SHA=""
 ARG SOURCE_DATE=""
 
-WORKDIR /usr/src/app/fluxer_docs
+WORKDIR /usr/src/app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
 		ca-certificates \
 		libvips42 && \
 	rm -rf /var/lib/apt/lists/*
 
-RUN corepack enable && corepack prepare pnpm@10.29.3 --activate
+COPY --from=oven/bun:1.4.2 /usr/local/bin/bun /usr/local/bin/bun
 
 LABEL maintainer="Fluxer"
 LABEL org.opencontainers.image.title="fluxer-docs"
@@ -51,14 +66,16 @@ LABEL org.opencontainers.image.revision="${SOURCE_SHA}"
 LABEL org.opencontainers.image.created="${SOURCE_DATE}"
 LABEL app.fluxer.build-version="${BUILD_VERSION}"
 
-COPY --from=deploy /out ./
-COPY --from=deploy /usr/src/app/fluxer_docs/dist ./dist
+# See fluxer_api/Dockerfile: no pnpm-deploy equivalent, so this ships the whole
+# monorepo's production node_modules + source tree, not just fluxer_docs's slice.
+COPY --from=prod-deps /usr/src/app ./
+COPY --from=build /usr/src/app/fluxer_docs/dist ./fluxer_docs/dist
 
-RUN mkdir -p /usr/src/app/.cache/corepack && \
-	chown -R 65532:65532 /usr/src/app
+RUN chown -R 65532:65532 /usr/src/app
+
+WORKDIR /usr/src/app/fluxer_docs
 
 ENV HOME=/usr/src/app
-ENV COREPACK_HOME=/usr/src/app/.cache/corepack
 ENV NODE_ENV=production
 ENV NODE_OPTIONS="--enable-source-maps"
 ENV NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-certificates.crt
@@ -69,6 +86,6 @@ USER 65532:65532
 EXPOSE 8080
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-	CMD ["./node_modules/.bin/tsx", "scripts/Healthcheck.ts"]
+	CMD ["bunx", "tsx", "scripts/Healthcheck.ts"]
 
-CMD ["./node_modules/.bin/tsx", "scripts/StartServer.ts"]
+CMD ["bunx", "tsx", "scripts/StartServer.ts"]

@@ -25,12 +25,12 @@ const PRIORITY_CSS_SOURCES: ReadonlyArray<CssSource> = [
 	{
 		file: 'src/features/theme/styles/generated/color-system.css',
 		label: 'color-system',
-		generatedBy: 'pnpm generate:colors',
+		generatedBy: 'bun run generate:colors',
 	},
 	{
 		file: 'src/features/theme/styles/generated/message-layout.css',
 		label: 'message-layout',
-		generatedBy: 'pnpm generate:message-layout',
+		generatedBy: 'bun run generate:message-layout',
 	},
 ];
 const PRIORITY_SOURCE_INDEX = new Map(PRIORITY_CSS_SOURCES.map((source, index) => [source.file, index]));
@@ -154,7 +154,7 @@ function discoverCssSources(appDir: string): ReadonlyArray<CssSource> {
 	const missing = PRIORITY_CSS_SOURCES.filter((source) => !discovered.has(source.file));
 	if (missing.length > 0) {
 		const remedies = missing.map(
-			(source) => `  ${source.file} is missing. Run \`${source.generatedBy ?? 'pnpm build'}\` first.`,
+			(source) => `  ${source.file} is missing. Run \`${source.generatedBy ?? 'bun run build'}\` first.`,
 		);
 		throw new Error(
 			`Cannot generate the theme variable manifest from a partial input.\n${remedies.join('\n')}\n` +
@@ -823,7 +823,7 @@ function main(): void {
 	const contents = render(appDir);
 	if (process.argv.includes('--check')) {
 		if (!existsSync(outputPath) || readFileSync(outputPath, 'utf8') !== contents) {
-			throw new Error(`${relative(appDir, outputPath)} is stale. Run pnpm generate:theme-variables.`);
+			throw new Error(`${relative(appDir, outputPath)} is stale. Run bun run generate:theme-variables.`);
 		}
 		console.log(`Checked ${relative(appDir, outputPath)}`);
 		return;

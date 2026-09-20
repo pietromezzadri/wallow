@@ -93,5 +93,5 @@
 		"msw": "catalog:",
 		"vitest": "catalog:"
 	},
-	"packageManager": "pnpm@10.29.3"
+	"packageManager": "bun@1.4.2"
 }

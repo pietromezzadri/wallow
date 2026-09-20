@@ -11,7 +11,7 @@ pub async fn bootstrap(skip_install: bool) -> Result<()> {
     ensure_writable_dev_paths()?;
     if !skip_install {
         run_command(
-            &["pnpm", "install", "--frozen-lockfile"],
+            &["bun", "install", "--frozen-lockfile"],
             RunOptions {
                 env: PNPM_INSTALL_ENV
                     .iter()

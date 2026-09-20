@@ -56,8 +56,8 @@ function parseArgs(): GenerateOptions {
 function findRepositoryRoot(): string {
 	let dir = process.cwd();
 	for (;;) {
-		const workspacePath = path.join(dir, 'pnpm-workspace.yaml');
-		if (fs.existsSync(workspacePath)) {
+		const lockfilePath = path.join(dir, 'bun.lock');
+		if (fs.existsSync(lockfilePath)) {
 			return dir;
 		}
 		const parent = path.dirname(dir);
@@ -66,7 +66,7 @@ function findRepositoryRoot(): string {
 		}
 		dir = parent;
 	}
-	throw new Error('Could not find repository root (no pnpm-workspace.yaml found)');
+	throw new Error('Could not find repository root (no bun.lock found)');
 }
 function getTargetOutputPath(basePath: string, target: GenerateTarget, customOutputPath: string | null): string {
 	if (customOutputPath) {

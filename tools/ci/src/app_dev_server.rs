@@ -103,25 +103,25 @@ impl AppDevServer {
         self.run_cached_step(
             "wasm",
             gather_wasm_inputs,
-            "pnpm wasm:codegen",
-            |server, shutdown| Box::pin(server.run_command("pnpm", &["wasm:codegen"], shutdown)),
+            "bun wasm:codegen",
+            |server, shutdown| Box::pin(server.run_command("bun", &["wasm:codegen"], shutdown)),
             &mut shutdown_rx,
         )
         .await?;
         self.run_cached_step(
             "colors",
             gather_color_inputs,
-            "pnpm generate:colors",
-            |server, shutdown| Box::pin(server.run_command("pnpm", &["generate:colors"], shutdown)),
+            "bun generate:colors",
+            |server, shutdown| Box::pin(server.run_command("bun", &["generate:colors"], shutdown)),
             &mut shutdown_rx,
         )
         .await?;
         self.run_cached_step(
             "messageLayout",
             gather_message_layout_inputs,
-            "pnpm generate:message-layout",
+            "bun generate:message-layout",
             |server, shutdown| {
-                Box::pin(server.run_command("pnpm", &["generate:message-layout"], shutdown))
+                Box::pin(server.run_command("bun", &["generate:message-layout"], shutdown))
             },
             &mut shutdown_rx,
         )
@@ -129,17 +129,17 @@ impl AppDevServer {
         self.run_cached_step(
             "masks",
             gather_mask_inputs,
-            "pnpm generate:masks",
-            |server, shutdown| Box::pin(server.run_command("pnpm", &["generate:masks"], shutdown)),
+            "bun generate:masks",
+            |server, shutdown| Box::pin(server.run_command("bun", &["generate:masks"], shutdown)),
             &mut shutdown_rx,
         )
         .await?;
         self.run_cached_step(
             "cssTypes",
             gather_css_module_inputs,
-            "pnpm generate:css-types",
+            "bun generate:css-types",
             |server, shutdown| {
-                Box::pin(server.run_command("pnpm", &["generate:css-types"], shutdown))
+                Box::pin(server.run_command("bun", &["generate:css-types"], shutdown))
             },
             &mut shutdown_rx,
         )
@@ -148,8 +148,8 @@ impl AppDevServer {
         self.run_cached_step(
             "lingui",
             gather_lingui_inputs,
-            "pnpm lingui:compile",
-            |server, shutdown| Box::pin(server.run_command("pnpm", &["lingui:compile"], shutdown)),
+            "bun lingui:compile",
+            |server, shutdown| Box::pin(server.run_command("bun", &["lingui:compile"], shutdown)),
             &mut shutdown_rx,
         )
         .await?;

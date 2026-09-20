@@ -7,7 +7,7 @@ ARG USER_UID=1000
 ARG USER_GID=1000
 ARG NODE_MAJOR=24
 ARG ELP_VERSION=2026-02-27
-ARG PNPM_VERSION=10.29.3
+ARG BUN_VERSION=1.4.2
 ARG WASM_BINDGEN_VERSION=0.2.123
 
 ENV DEBIAN_FRONTEND=noninteractive
@@ -130,8 +130,7 @@ RUN apt-get update \
 
 RUN curl --retry 5 --retry-delay 2 --retry-all-errors -fsSL https://deb.nodesource.com/setup_${NODE_MAJOR}.x | bash - \
 	&& apt-get install -y --no-install-recommends nodejs \
-	&& rm -rf /var/lib/apt/lists/* \
-	&& corepack enable
+	&& rm -rf /var/lib/apt/lists/*
 
 RUN python3 -m pip install --break-system-packages --no-cache-dir awscli
 
@@ -182,8 +181,8 @@ COPY --from=seaweedfs /usr/bin/weed /usr/local/bin/weed
 USER ${USERNAME}
 
 ENV DOCKER_HOST="unix:///var/run/docker.sock" \
-	PATH="/home/${USERNAME}/.cargo/bin:${PATH}" \
-	PNPM_HOME="/home/${USERNAME}/.local/share/pnpm"
+	PATH="/home/${USERNAME}/.cargo/bin:/home/${USERNAME}/.bun/bin:${PATH}" \
+	BUN_INSTALL="/home/${USERNAME}/.bun"
 
 ENV CC_wasm32_unknown_unknown="clang" \
 	AR_wasm32_unknown_unknown="llvm-ar"
@@ -194,7 +193,7 @@ RUN curl --retry 5 --retry-delay 2 --retry-all-errors -fsSL https://sh.rustup.rs
 	&& cargo install wasm-bindgen-cli --version "${WASM_BINDGEN_VERSION}" --locked \
 	&& rm -rf "/home/${USERNAME}/.cargo/registry" "/home/${USERNAME}/.cargo/git"
 
-RUN corepack prepare "pnpm@${PNPM_VERSION}" --activate \
-	&& pnpm --version
+RUN curl --retry 5 --retry-delay 2 --retry-all-errors -fsSL https://bun.sh/install | bash -s "bun-v${BUN_VERSION}" \
+	&& bun --version
 
 WORKDIR /workspaces/fluxer

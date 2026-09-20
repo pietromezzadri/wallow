@@ -484,7 +484,7 @@ mod tests {
 
     #[test]
     fn formats_posix_commands_for_logs() {
-        assert_eq!(format_command(&["pnpm", "build"]), "pnpm build");
+        assert_eq!(format_command(&["bun", "build"]), "bun build");
         assert_eq!(
             format_command(&["", "two words", "a'b"]),
             "'' 'two words' 'a'\"'\"'b'"

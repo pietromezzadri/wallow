@@ -179,7 +179,7 @@ jobs:
           cargo run --locked --quiet --manifest-path ${{ github.workspace }}/_ci/tools/ci/Cargo.toml -- build-desktop
           --step ensure_python3_windows
 
-      - name: Shorten Windows paths and pin pnpm store
+      - name: Shorten Windows paths and pin bun cache
         if: runner.os == 'Windows'
         run: >-
           cargo run --locked --quiet --manifest-path ${{ github.workspace }}/_ci/tools/ci/Cargo.toml -- build-desktop
@@ -200,30 +200,30 @@ jobs:
         with:
           node-version: 24
 
-      - name: Set up pnpm via corepack
+      - name: Set up bun
         run: >-
           cargo run --locked --quiet --manifest-path ${{ github.workspace }}/_ci/tools/ci/Cargo.toml -- build-desktop
           --step setup_pnpm_corepack
 
-      - name: Resolve pnpm store path (Windows)
+      - name: Resolve bun cache path (Windows)
         if: runner.os == 'Windows'
         run: >-
           cargo run --locked --quiet --manifest-path ${{ github.workspace }}/_ci/tools/ci/Cargo.toml -- build-desktop
           --step resolve_pnpm_store_windows
 
-      - name: Resolve pnpm store path (Unix)
+      - name: Resolve bun cache path (Unix)
         if: runner.os != 'Windows'
         run: >-
           cargo run --locked --quiet --manifest-path ${{ github.workspace }}/_ci/tools/ci/Cargo.toml -- build-desktop
           --step resolve_pnpm_store_unix
 
-      - name: Cache pnpm store
+      - name: Cache bun dependencies
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
-          path: ${{ env.PNPM_STORE_PATH }}
-          key: ${{ runner.os }}-${{ matrix.arch }}-pnpm-store-${{ hashFiles('source/pnpm-lock.yaml') }}
+          path: ${{ env.BUN_CACHE_PATH }}
+          key: ${{ runner.os }}-${{ matrix.arch }}-bun-cache-${{ hashFiles('source/bun.lock') }}
           restore-keys: |
-            ${{ runner.os }}-${{ matrix.arch }}-pnpm-store-
+            ${{ runner.os }}-${{ matrix.arch }}-bun-cache-
 
       - name: Install Python setuptools (Windows ARM64)
         if: matrix.platform == 'windows' && matrix.arch == 'arm64'

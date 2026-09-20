@@ -8,7 +8,7 @@
 **/.git
 **/.git/**
 /.github/
-/.pnpm-store/
+/.bun-store/
 
 **/.env
 **/.env.*.local

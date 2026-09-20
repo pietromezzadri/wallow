@@ -36,7 +36,7 @@ use walkdir::WalkDir;
 use zip::write::SimpleFileOptions;
 
 const PUBLIC_DL_BASE: &str = "https://api.fluxer.app/dl";
-const PNPM_VERSION: &str = "10.29.3";
+const BUN_VERSION: &str = "1.4.2";
 const RUST_TOOLCHAIN: &str = "1.93.0";
 const DEFAULT_DESKTOP_VARIANT: &str = "default";
 const LINUX_PIPEWIRE_VERSION: &str = "0.3.65";
@@ -193,9 +193,13 @@ pub async fn run(args: BuildDesktopArgs) -> Result<()> {
         DesktopStep::WindowsPaths => windows_paths_step().await,
         DesktopStep::SetWorkdirUnix => set_workdir_unix_step(),
         DesktopStep::EnsurePython3Windows => ensure_python3_windows_step(),
-        DesktopStep::SetupPnpmCorepack => setup_pnpm_corepack_step(),
+        // The `SetupPnpmCorepack` / `ResolvePnpmStore*` variant names are kept as-is even
+        // though they now set up bun: they are `--step` CLI values consumed by
+        // .github/workflows/build-desktop.yaml, which is outside the scope of this
+        // pnpm-to-bun conversion pass.
+        DesktopStep::SetupPnpmCorepack => setup_bun_step(),
         DesktopStep::ResolvePnpmStoreWindows | DesktopStep::ResolvePnpmStoreUnix => {
-            resolve_pnpm_store_step()
+            resolve_bun_cache_step()
         }
         DesktopStep::InstallSetuptoolsWindowsArm64 => install_setuptools_windows_arm64_step(),
         DesktopStep::InstallSetuptoolsMacos => install_setuptools_macos_step(),
@@ -203,9 +207,10 @@ pub async fn run(args: BuildDesktopArgs) -> Result<()> {
         DesktopStep::InstallMsvcArm64Tools => install_msvc_arm64_tools_step(),
         DesktopStep::InstallRustWindowsTargets => install_rust_windows_targets_step(),
         DesktopStep::InstallDependencies => {
-            run_command(pnpm_command()?.args(["install", "--frozen-lockfile"]))
+            run_command(bun_command()?.args(["install", "--frozen-lockfile"]))
         }
-        DesktopStep::UpdateVersion => run_command(pnpm_command()?.args([
+        DesktopStep::UpdateVersion => run_command(bun_command()?.args([
+            "pm",
             "version",
             &require_env("VERSION")?,
             "--no-git-tag-version",
@@ -523,22 +528,19 @@ async fn windows_paths_step() -> Result<()> {
     fs::create_dir_all(eb_cache).context("Failed to create C:\\ebcache")?;
 
     let arch = require_env("ARCH")?;
-    let store_dir = PathBuf::from(&github_workspace).join(format!("pnpm-store-{arch}"));
-    fs::create_dir_all(&store_dir)
-        .with_context(|| format!("Failed to create {}", store_dir.display()))?;
-    fs::write(
-        Path::new(r"W:\.npmrc"),
-        format!("store-dir={}\n", store_dir.display()),
-    )
-    .context("Failed to write W:\\.npmrc")?;
+    let cache_dir = PathBuf::from(&github_workspace).join(format!("bun-cache-{arch}"));
+    fs::create_dir_all(&cache_dir)
+        .with_context(|| format!("Failed to create {}", cache_dir.display()))?;
 
     append_github_env(&[
         ("WORKDIR", "W:"),
         ("TEMP", r"C:\t"),
         ("TMP", r"C:\t"),
         ("ELECTRON_BUILDER_CACHE", r"C:\ebcache"),
-        ("NPM_CONFIG_STORE_DIR", store_dir.to_string_lossy().as_ref()),
-        ("npm_config_store_dir", store_dir.to_string_lossy().as_ref()),
+        (
+            "BUN_INSTALL_CACHE_DIR",
+            cache_dir.to_string_lossy().as_ref(),
+        ),
     ])?;
 
     run_command(CommandSpec::new("git").args(["config", "--global", "core.longpaths", "true"]))?;
@@ -581,19 +583,15 @@ fn set_workdir_unix_step() -> Result<()> {
     if env::consts::OS == "macos" {
         let arch = require_env("ARCH")?;
         let home = require_home()?;
-        let store_dir = home
+        let cache_dir = home
             .join("Library")
-            .join("pnpm")
-            .join(format!("store-{arch}"));
-        fs::create_dir_all(&store_dir)
-            .with_context(|| format!("Failed to create {}", store_dir.display()))?;
+            .join("bun")
+            .join(format!("install-cache-{arch}"));
+        fs::create_dir_all(&cache_dir)
+            .with_context(|| format!("Failed to create {}", cache_dir.display()))?;
         env_pairs.push((
-            "NPM_CONFIG_STORE_DIR",
-            store_dir.to_string_lossy().to_string(),
-        ));
-        env_pairs.push((
-            "npm_config_store_dir",
-            store_dir.to_string_lossy().to_string(),
+            "BUN_INSTALL_CACHE_DIR",
+            cache_dir.to_string_lossy().to_string(),
         ));
     }
 
@@ -624,155 +622,114 @@ fn ensure_python3_windows_step() -> Result<()> {
     Ok(())
 }
 
-fn setup_pnpm_corepack_step() -> Result<()> {
-    let corepack = corepack_program()?;
-    run_command(CommandSpec::new(corepack.clone()).arg("enable"))?;
-    run_command(CommandSpec::new(corepack).args([
-        "prepare",
-        &format!("pnpm@{PNPM_VERSION}"),
-        "--activate",
-    ]))?;
-    ensure_pnpm_available()
+/// Bun has no corepack-style activation model: there is no registry package to
+/// `corepack prepare`/`--activate`. Setup is just "make sure a `bun` binary is on
+/// PATH", installing it from the official installer when a fresh CI runner doesn't
+/// already have one.
+fn setup_bun_step() -> Result<()> {
+    ensure_bun_available()
 }
 
-fn corepack_program() -> Result<OsString> {
-    if command_succeeds(CommandSpec::new("corepack").arg("--version")) {
-        return Ok(OsString::from("corepack"));
-    }
-
-    if cfg!(windows) {
-        let node_dir =
-            node_executable_dir().context("Failed to locate Node.js while resolving corepack")?;
-
-        for file_name in ["corepack.cmd", "corepack.exe", "corepack"] {
-            let candidate = node_dir.join(file_name);
-            if candidate.exists() {
-                return Ok(candidate.into_os_string());
-            }
-        }
-
-        bail!(
-            "corepack not found on PATH or next to Node.js at {}",
-            node_dir.display()
-        );
-    }
-
-    bail!("corepack not found on PATH")
-}
-
-fn ensure_pnpm_available() -> Result<()> {
-    if let Ok(pnpm) = pnpm_program()
-        && command_succeeds(CommandSpec::new(pnpm).arg("--version"))
+fn ensure_bun_available() -> Result<()> {
+    if let Ok(bun) = bun_program()
+        && command_succeeds(CommandSpec::new(bun).arg("--version"))
     {
         return Ok(());
     }
 
     if cfg!(windows) {
-        let npm = npm_program()?;
-        let pnpm_package = format!("pnpm@{PNPM_VERSION}");
-        run_command(CommandSpec::new(npm.clone()).args(["install", "--global", &pnpm_package]))?;
+        run_command(CommandSpec::new("powershell").args([
+            "-NoProfile",
+            "-Command",
+            "irm bun.sh/install.ps1 | iex",
+        ]))?;
 
-        let npm_prefix = output_text(CommandSpec::new(npm).args(["prefix", "--global"]))
-            .context("Failed to resolve global npm prefix after installing pnpm")?;
-        let npm_prefix = PathBuf::from(npm_prefix);
-        append_github_path(&npm_prefix)?;
+        if let Some(user_profile) = env::var_os("USERPROFILE").filter(|value| !value.is_empty()) {
+            let bun_bin = PathBuf::from(user_profile).join(".bun").join("bin");
+            if bun_bin.exists() {
+                append_github_path(&bun_bin)?;
+            }
+        }
+    } else {
+        run_command(CommandSpec::new("bash").args([
+            "-c",
+            &format!("curl -fsSL https://bun.sh/install | bash -s \"bun-v{BUN_VERSION}\""),
+        ]))?;
 
-        for file_name in ["pnpm.cmd", "pnpm.exe", "pnpm"] {
-            let candidate = npm_prefix.join(file_name);
-            if candidate.exists() {
-                return run_command(CommandSpec::new(candidate.into_os_string()).arg("--version"));
+        if let Ok(home) = require_home() {
+            let bun_bin = home.join(".bun").join("bin");
+            if bun_bin.exists() {
+                append_github_path(&bun_bin)?;
             }
         }
     }
 
-    run_command(pnpm_command()?.arg("--version"))
-        .context("Failed to verify pnpm after Corepack setup")
+    run_command(bun_command()?.arg("--version")).context("Failed to verify bun after installation")
 }
 
-fn pnpm_command() -> Result<CommandSpec> {
-    Ok(CommandSpec::new(pnpm_program()?))
+fn bun_command() -> Result<CommandSpec> {
+    Ok(CommandSpec::new(bun_program()?))
 }
 
-fn pnpm_program() -> Result<OsString> {
-    if command_succeeds(CommandSpec::new("pnpm").arg("--version")) {
-        return Ok(OsString::from("pnpm"));
+fn bun_program() -> Result<OsString> {
+    if command_succeeds(CommandSpec::new("bun").arg("--version")) {
+        return Ok(OsString::from("bun"));
     }
 
     if cfg!(windows) {
-        for candidate in pnpm_windows_candidates() {
+        for candidate in bun_windows_candidates() {
             if candidate.exists() {
                 return Ok(candidate.into_os_string());
             }
         }
+    } else if let Ok(home) = require_home() {
+        let candidate = home.join(".bun").join("bin").join("bun");
+        if candidate.exists() {
+            return Ok(candidate.into_os_string());
+        }
     }
 
-    bail!("pnpm not found on PATH")
+    bail!("bun not found on PATH")
 }
 
-fn pnpm_windows_candidates() -> Vec<PathBuf> {
+/// Bun's official installers don't go through a package manager on any platform, so
+/// there's no npm-global-prefix or Node.js-adjacent lookup like the old pnpm fallback
+/// used. The Windows installer's one documented, fixed install location is
+/// `%USERPROFILE%\.bun\bin\bun.exe`.
+fn bun_windows_candidates() -> Vec<PathBuf> {
     let mut candidates = Vec::new();
 
-    if let Ok(npm) = npm_program()
-        && let Ok(prefix) = output_text(CommandSpec::new(npm).args(["prefix", "--global"]))
-    {
-        push_windows_command_candidates(&mut candidates, Path::new(&prefix), "pnpm");
-    }
-
-    if let Ok(node_dir) = node_executable_dir() {
-        push_windows_command_candidates(&mut candidates, &node_dir, "pnpm");
+    if let Some(user_profile) = env::var_os("USERPROFILE").filter(|value| !value.is_empty()) {
+        candidates.push(
+            PathBuf::from(user_profile)
+                .join(".bun")
+                .join("bin")
+                .join("bun.exe"),
+        );
     }
 
     candidates
 }
 
-fn push_windows_command_candidates(candidates: &mut Vec<PathBuf>, dir: &Path, command: &str) {
-    for extension in ["cmd", "exe", ""] {
-        let file_name = if extension.is_empty() {
-            command.to_string()
-        } else {
-            format!("{command}.{extension}")
-        };
-        candidates.push(dir.join(file_name));
-    }
+/// Bun's install cache lives at a fixed, computable path (`$BUN_INSTALL/install/cache`,
+/// defaulting to `~/.bun/install/cache`, or `$BUN_INSTALL_CACHE_DIR` when the
+/// platform-specific steps above redirected it) rather than behind a `pnpm store path`
+/// style subcommand, so we compute it directly instead of shelling out.
+fn resolve_bun_cache_step() -> Result<()> {
+    let cache_dir = bun_cache_dir()?;
+    fs::create_dir_all(&cache_dir)
+        .with_context(|| format!("Failed to create {}", cache_dir.display()))?;
+    append_github_env(&[("BUN_CACHE_PATH", cache_dir.to_string_lossy().as_ref())])
 }
 
-fn npm_program() -> Result<OsString> {
-    if command_succeeds(CommandSpec::new("npm").arg("--version")) {
-        return Ok(OsString::from("npm"));
+fn bun_cache_dir() -> Result<PathBuf> {
+    if let Some(dir) = env::var_os("BUN_INSTALL_CACHE_DIR").filter(|value| !value.is_empty()) {
+        return Ok(PathBuf::from(dir));
     }
-
-    if cfg!(windows) {
-        let node_dir =
-            node_executable_dir().context("Failed to locate Node.js while resolving npm")?;
-
-        for file_name in ["npm.cmd", "npm.exe", "npm"] {
-            let candidate = node_dir.join(file_name);
-            if candidate.exists() {
-                return Ok(candidate.into_os_string());
-            }
-        }
-
-        bail!(
-            "npm not found on PATH or next to Node.js at {}",
-            node_dir.display()
-        );
+    if let Some(bun_install) = env::var_os("BUN_INSTALL").filter(|value| !value.is_empty()) {
+        return Ok(PathBuf::from(bun_install).join("install").join("cache"));
     }
-
-    bail!("npm not found on PATH")
-}
-
-fn node_executable_dir() -> Result<PathBuf> {
-    let node = output_text(CommandSpec::new("node").args(["-p", "process.execPath"]))?;
-    let node = PathBuf::from(node);
-    node.parent()
-        .map(Path::to_path_buf)
-        .ok_or_else(|| anyhow!("Node.js executable has no parent: {}", node.display()))
-}
-
-fn resolve_pnpm_store_step() -> Result<()> {
-    let store = output_text(pnpm_command()?.args(["store", "path", "--silent"]))?;
-    fs::create_dir_all(&store).with_context(|| format!("Failed to create pnpm store {store}"))?;
-    append_github_env(&[("PNPM_STORE_PATH", store.as_str())])
+    Ok(require_home()?.join(".bun").join("install").join("cache"))
 }
 
 fn install_setuptools_windows_arm64_step() -> Result<()> {
@@ -1429,9 +1386,11 @@ fn install_rust_windows_targets_step() -> Result<()> {
 }
 
 fn build_electron_main_step() -> Result<()> {
+    // `build` collides with bun's own top-level bundler subcommand, so this must use
+    // `bun run build` explicitly rather than the bare `bun build` shorthand.
     run_command(
-        pnpm_command()?
-            .arg("build")
+        bun_command()?
+            .args(["run", "build"])
             .env("NODE_ENV", "production")
             .env("FLUXER_DESKTOP_PRODUCTION", "true"),
     )
@@ -1521,9 +1480,8 @@ fn build_app_step(platform: DesktopBuildPlatform) -> Result<()> {
             "::group::electron-builder {:?} attempt {attempt}/3",
             platform
         );
-        let mut command = pnpm_command()?
+        let mut command = CommandSpec::new("bunx")
             .args([
-                "exec",
                 "electron-builder",
                 "--config",
                 "electron-builder.config.cjs",

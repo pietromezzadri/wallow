@@ -241,7 +241,7 @@ async function readOrDownloadAsset(asset, options = {}) {
 	} catch (error) {
 		if (options.offline) {
 			throw new Error(
-				`missing or invalid local media asset ${asset.fileName}; run pnpm wasm:bench:download-realmedia`,
+				`missing or invalid local media asset ${asset.fileName}; run bun run wasm:bench:download-realmedia`,
 				{cause: error},
 			);
 		}

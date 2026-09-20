@@ -9,7 +9,7 @@ services:
     init: true
     environment:
       DOCKER_HOST: unix:///var/run/docker.sock
-      npm_config_store_dir: /home/vscode/.local/share/pnpm/store
+      BUN_INSTALL_CACHE_DIR: /home/vscode/.bun/install/cache
       FLUXER_PUBLIC_PORT: "${FLUXER_DEV_PROXY_PORT:-8088}"
       FLUXER_PUBLIC_URL: "http://localhost:${FLUXER_DEV_PROXY_PORT:-8088}"
       FLUXER_API_ENDPOINT: "http://localhost:${FLUXER_DEV_PROXY_PORT:-8088}/api"
@@ -242,7 +242,7 @@ services:
         target: /workspaces/fluxer/fluxer_api/pkgs/postgres/node_modules
         volume:
           nocopy: true
-      - pnpm-store:/home/vscode/.local/share/pnpm/store
+      - bun-install-cache:/home/vscode/.bun/install/cache
       - cargo-registry:/home/vscode/.cargo/registry
       - cargo-git:/home/vscode/.cargo/git
       - rust-target:/workspaces/fluxer/target
@@ -348,7 +348,7 @@ services:
       - mailpit-data:/data
 
 volumes:
-  pnpm-store:
+  bun-install-cache:
   root-node-modules:
   fluxer-api-node-modules:
   fluxer-app-node-modules:

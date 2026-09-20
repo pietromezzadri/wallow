@@ -227,7 +227,7 @@ pub fn resolve_cloudflare_public_url(public_url_arg: Option<&str>) -> Result<Str
         }
     }
     bail!(
-        "Missing Cloudflare tunnel public URL. Run `pnpm dev:tunnel:configure -- --public-url https://...` or pass `pnpm dev -- --cloudflare-tunnel --public-url https://...`."
+        "Missing Cloudflare tunnel public URL. Run `bun run dev:tunnel:configure -- --public-url https://...` or pass `bun run dev -- --cloudflare-tunnel --public-url https://...`."
     );
 }
 
@@ -294,7 +294,7 @@ async fn wait_cloudflare_tunnel_origin() -> Result<()> {
         .unwrap_or(30);
     if let Err(error) = wait_tcp("Fluxer dev proxy", LOOPBACK_HOST, DEV_PROXY_PORT, timeout).await {
         bail!(
-            "Cloudflare Tunnel origin is not reachable at http://{LOOPBACK_HOST}:{DEV_PROXY_PORT}: {error}\nStart the full stack with `pnpm dev:tunnel`; `pnpm dev:tunnel:run` only starts cloudflared and expects the dev proxy to already be running."
+            "Cloudflare Tunnel origin is not reachable at http://{LOOPBACK_HOST}:{DEV_PROXY_PORT}: {error}\nStart the full stack with `bun run dev:tunnel`; `bun run dev:tunnel:run` only starts cloudflared and expects the dev proxy to already be running."
         );
     }
     Ok(())

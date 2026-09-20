@@ -32,7 +32,7 @@
 		"packages/schema/src/domains/admin/VoiceNoiseSuppressionSchemas.ts": ["exports"],
 		"packages/schema/src/domains/geolocation/GeolocationSchemas.ts": ["exports"],
 		"packages/schema/src/domains/guild/GuildAuditLogSchemas.ts": ["exports"],
-		"pnpm-workspace.yaml": ["catalog"]
+		"package.json": ["catalog"]
 	},
 	"workspaces": {
 		".": {

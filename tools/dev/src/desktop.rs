@@ -37,7 +37,7 @@ const MACOS_DEV_ELECTRON_USAGE_DESCRIPTIONS: &[(&str, &str)] = &[
 
 pub fn install_desktop() -> Result<()> {
     run_command(
-        &["pnpm", "install", "--frozen-lockfile"],
+        &["bun", "install", "--frozen-lockfile"],
         RunOptions {
             cwd: ROOT.as_path(),
             env: PNPM_INSTALL_ENV
@@ -74,7 +74,7 @@ pub fn build_desktop(skip_native: bool) -> Result<()> {
         ),
     ];
     run_command(
-        &["pnpm", "build"],
+        &["bun", "run", "build"],
         RunOptions {
             cwd: DESKTOP_DIR.as_path(),
             env,
@@ -86,7 +86,7 @@ pub fn build_desktop(skip_native: bool) -> Result<()> {
 
 pub fn typecheck_desktop() -> Result<()> {
     run_command(
-        &["pnpm", "typecheck"],
+        &["bun", "run", "typecheck"],
         RunOptions {
             cwd: DESKTOP_DIR.as_path(),
             ..RunOptions::default()
@@ -122,12 +122,7 @@ fn base_electron_command() -> Vec<String> {
             return disclaimed_electron_command(&launcher, &electron_binary);
         }
     }
-    vec![
-        "pnpm".to_owned(),
-        "exec".to_owned(),
-        "electron".to_owned(),
-        ".".to_owned(),
-    ]
+    vec!["bunx".to_owned(), "electron".to_owned(), ".".to_owned()]
 }
 
 fn disclaimed_electron_command(launcher: &Path, electron_binary: &Path) -> Vec<String> {
@@ -177,8 +172,7 @@ pub fn package_desktop(args: &[String]) -> Result<()> {
     let env = packaging_env(args)?;
     build_desktop(false)?;
     let mut builder_args = vec![
-        "pnpm".to_owned(),
-        "exec".to_owned(),
+        "bunx".to_owned(),
         "electron-builder".to_owned(),
         "--dir".to_owned(),
         "--config".to_owned(),
@@ -261,7 +255,7 @@ fn patch_macos_dev_electron_info_plist() -> Result<()> {
     let info_plist = dev_electron_info_plist_path();
     if !info_plist.is_file() {
         bail!(
-            "missing dev Electron Info.plist at {}; run `pnpm dev:desktop:install` first",
+            "missing dev Electron Info.plist at {}; run `bun run dev:desktop:install` first",
             info_plist.display()
         );
     }

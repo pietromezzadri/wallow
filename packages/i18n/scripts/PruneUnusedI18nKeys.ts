@@ -443,7 +443,7 @@ async function main(): Promise<void> {
 		console.log('\ndry run complete. run with --apply to prune these keys.');
 	} else {
 		console.log("\npruning complete. don't forget to regenerate i18n types:");
-		console.log('   pnpm i18n:generate');
+		console.log('   bun run i18n:generate');
 	}
 }
 

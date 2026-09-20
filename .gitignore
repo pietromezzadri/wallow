@@ -9,7 +9,7 @@
 /.claude/
 /.direnv/
 /.fluxer/
-/.pnpm-store/
+/.bun-store/
 
 **/*.css.d.ts
 **/*.tsbuildinfo

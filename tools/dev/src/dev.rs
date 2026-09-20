@@ -604,7 +604,7 @@ async fn ensure_js_dependencies_if_needed(
 ) -> Result<AwaitOutcome<()>> {
     if selected_needs_js_dependency_preflight(selected) {
         match run_command_interruptible(
-            &["pnpm", "install", "--frozen-lockfile"],
+            &["bun", "install", "--frozen-lockfile"],
             RunOptions {
                 env: PNPM_INSTALL_ENV
                     .iter()

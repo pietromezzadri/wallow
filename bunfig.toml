@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# Migrated from pnpm-workspace.yaml. Ported: catalog, overrides, patchedDependencies,
+# trustedDependencies (package.json) and minimumReleaseAge (below). NOT ported —
+# bun has no equivalent as of 1.4.x: blockExoticSubdeps, trustPolicy/trustPolicyExclude,
+# strictDepBuilds. Accepted gap for this personal fork; see plan doc.
+
+[install]
+# pnpm's minimumReleaseAge was 1440 minutes (24h); bun's unit is seconds.
+minimumReleaseAge = 86400

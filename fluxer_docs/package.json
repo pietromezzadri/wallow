@@ -9,7 +9,7 @@
 		"start": "tsx scripts/StartServer.ts",
 		"test": "node --import tsx --test scripts/*.test.ts",
 		"typecheck": "astro check --minimumFailingSeverity warning",
-		"verify": "pnpm verify:sidebar && pnpm verify:coverage && pnpm verify:schemas && pnpm verify:style",
+		"verify": "bun run verify:sidebar && bun run verify:coverage && bun run verify:schemas && bun run verify:style",
 		"verify:coverage": "tsx scripts/VerifyDocsCoverage.ts",
 		"verify:coverage:source": "tsx scripts/VerifyDocsCoverage.ts --source-only",
 		"verify:schemas": "tsx scripts/VerifyDocsSchemas.ts",

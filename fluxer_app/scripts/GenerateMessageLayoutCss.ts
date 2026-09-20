@@ -11,7 +11,7 @@ function main(): void {
 	const css = renderMessageLayoutCss();
 	if (process.argv.includes('--check')) {
 		if (!existsSync(cssPath) || readFileSync(cssPath, 'utf8') !== css) {
-			throw new Error(`${relative(appDir, cssPath)} is stale. Run pnpm generate:message-layout.`);
+			throw new Error(`${relative(appDir, cssPath)} is stale. Run bun run generate:message-layout.`);
 		}
 		console.log(`Checked ${relative(appDir, cssPath)}`);
 		return;

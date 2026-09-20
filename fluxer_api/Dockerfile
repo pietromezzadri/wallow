@@ -3,11 +3,11 @@ ARG BUILD_VERSION
 
 FROM node:24-bookworm-slim AS base
 
+COPY --from=oven/bun:1.4.2 /usr/local/bin/bun /usr/local/bin/bun
+
 WORKDIR /usr/src/app
 
-RUN corepack enable && corepack prepare pnpm@10.29.3 --activate
-
-FROM base AS deploy
+FROM base AS build
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
 		build-essential \
@@ -21,9 +21,28 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY . .
 
-RUN pnpm install --frozen-lockfile
-RUN pnpm --filter fluxer_api run build
-RUN pnpm deploy --legacy --filter=fluxer_api --prod --config.allowUnusedPatches=true /out
+RUN bun install --frozen-lockfile
+RUN bun --filter fluxer_api run build
+
+# bun has no equivalent of `pnpm deploy --prod` (a pruned, self-contained output
+# directory for one workspace package), so a second, isolated install pass
+# produces a clean production-only node_modules instead: this stage never saw
+# the devDependencies installed in `build`, so `--production` has nothing to prune.
+FROM base AS prod-deps
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+		build-essential \
+		gcc \
+		libssl-dev \
+		pkg-config \
+		openssl \
+		libvips-dev \
+		python3 && \
+	rm -rf /var/lib/apt/lists/*
+
+COPY . .
+
+RUN bun install --frozen-lockfile --production
 
 FROM node:24-bookworm-slim
 
@@ -43,7 +62,7 @@ LABEL org.opencontainers.image.revision="${SOURCE_SHA}"
 LABEL org.opencontainers.image.created="${SOURCE_DATE}"
 LABEL app.fluxer.build-version="${BUILD_VERSION}"
 
-WORKDIR /usr/src/app/fluxer_api
+WORKDIR /usr/src/app
 
 RUN echo 'deb http://deb.debian.org/debian bookworm-backports main' > /etc/apt/sources.list.d/backports.list && \
 	apt-get update && apt-get install -y --no-install-recommends \
@@ -59,18 +78,20 @@ RUN echo 'deb http://deb.debian.org/debian bookworm-backports main' > /etc/apt/s
 		libheif-plugin-dav1d && \
 	rm -rf /var/lib/apt/lists/*
 
-RUN corepack enable && corepack prepare pnpm@10.29.3 --activate
+# NOTE: without pnpm's per-package `deploy --prod` pruning, this ships the whole
+# monorepo's production node_modules + source tree rather than just fluxer_api's
+# slice of it — a real image-size regression, accepted for a personal fork rather
+# than hand-rolling dependency-graph pruning bun has no built-in equivalent for.
+COPY --from=prod-deps /usr/src/app ./
+COPY --from=build /usr/src/app/fluxer_api/dist ./fluxer_api/dist
+COPY --from=build /usr/src/app/tsconfigs ./tsconfigs
 
-COPY --from=deploy /out ./
-COPY --from=deploy /usr/src/app/fluxer_api/dist ./dist
-COPY --from=deploy /usr/src/app/tsconfigs /usr/src/app/tsconfigs
-
-RUN rm -rf pkgs && \
-	mkdir -p /usr/src/app/.cache/corepack && \
+RUN rm -rf fluxer_api/pkgs && \
 	chown -R 65532:65532 /usr/src/app
 
+WORKDIR /usr/src/app/fluxer_api
+
 ENV HOME=/usr/src/app
-ENV COREPACK_HOME=/usr/src/app/.cache/corepack
 ENV NODE_ENV=production
 ENV NODE_OPTIONS="--enable-source-maps"
 ENV NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-certificates.crt

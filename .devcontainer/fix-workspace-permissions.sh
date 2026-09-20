@@ -28,7 +28,7 @@ for path in \
 	/home/vscode/.cargo/registry \
 	/home/vscode/.cargo/git \
 	/home/vscode/.local \
-	/home/vscode/.local/share/pnpm/store; do
+	/home/vscode/.bun/install/cache; do
 	repair_tree "$path"
 done
 

@@ -660,7 +660,7 @@ fn build_tailwind(manifest_dir: &Path, out_dir: &Path) {
     ];
     let Some(cli) = candidates.iter().find(|c| c.exists()) else {
         panic!(
-            "tailwindcss CLI not found. Run `pnpm install` in fluxer_admin/.\n\
+            "tailwindcss CLI not found. Run `bun install` in fluxer_admin/.\n\
              Searched: {:?}",
             candidates
         );
