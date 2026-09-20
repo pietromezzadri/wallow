@@ -4,6 +4,7 @@ ARG BUILD_VERSION
 FROM node:24-bookworm-slim AS base
 
 COPY --from=oven/bun:1.4.2 /usr/local/bin/bun /usr/local/bin/bun
+RUN ln -sf /usr/local/bin/bun /usr/local/bin/bunx
 
 WORKDIR /usr/src/app
 

@@ -16,6 +16,7 @@ ARG PUBLIC_ASSET_BASE_URL
 WORKDIR /usr/src/app
 
 COPY --from=oven/bun:1.4.2 /usr/local/bin/bun /usr/local/bin/bun
+RUN ln -sf /usr/local/bin/bun /usr/local/bin/bunx
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
 	curl ca-certificates build-essential clang \
