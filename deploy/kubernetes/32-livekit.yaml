@@ -30,14 +30,68 @@
 #
 # The workaround here is hostNetwork: true on the LiveKit pod: the container
 # binds 7880/7881/7882 directly on the minikube node's own network namespace,
-# with no Service/NAT hop in the way for the media ports, and the advertised
-# node_ip is set automatically at container start from the Downward API's
-# status.hostIP (a fieldRef, injected as $HOST_IP below) -- which for a
-# hostNetwork pod IS the node's address, i.e. normally identical to what
-# `minikube ip` prints. If that assumption is ever wrong for your minikube
-# driver/setup (check with `minikube ip` and compare against the pod's
-# HOST_IP, e.g. `kubectl exec -n wallow deploy/livekit -- env | grep HOST_IP`),
-# hardcode node_ip in the shell block below instead of trusting $HOST_IP.
+# with no Service/NAT hop in the way for the media ports.
+#
+# CORRECTED (2026-09-21): an earlier version of this comment claimed the
+# node's own address (`minikube ip`, e.g. 192.168.49.2) is NOT reachable
+# from WSL at all. That was wrong -- it was tested against port 80, which
+# only exists via ingress-nginx's NodePort remap (a different port number
+# entirely), not against a real hostNetwork-bound port. A genuinely
+# hostNetwork-bound port (confirmed with 7880) IS reachable directly from
+# WSL, just not from Windows or the outside world -- WSL sits one layer
+# closer to minikube's internal Docker bridge than Windows does.
+#
+# That distinction is what makes the current setup work. Three pieces,
+# all required:
+#
+#  1. node_ip below is this machine's real public IPv4 (get it with
+#     `curl -4 https://ifconfig.me` from WSL). LiveKit advertises this as a
+#     genuine host candidate, exactly like a normal non-NAT'd deployment
+#     would -- no TURN needed for it to be dialable, PROVIDED the next two
+#     pieces get a packet arriving on that IP all the way to LiveKit.
+#  2. Your home router must forward TCP 7881 and UDP 7882 to this Windows
+#     machine's LAN IP (192.168.15.12 as of 2026-09-21 -- WSL2 mirrored
+#     networking makes this the same address for both Windows and WSL) --
+#     and Windows Firewall needs inbound-allow rules for those same ports
+#     (done: "Wallow LiveKit TCP"/"Wallow LiveKit UDP", New-NetFirewallRule).
+#  3. deploy/kubernetes/livekit_relay.py must be running in WSL. It relays
+#     those same ports from WSL's own interface through to LiveKit's actual
+#     hostNetwork-bound ports on minikube's node (192.168.49.2 by default),
+#     which per the correction above, only WSL can reach directly -- this
+#     is the one remaining hop kubectl port-forward/netsh can't cover
+#     (no UDP support), so a small Python relay stands in instead.
+#
+#  CAVEAT: node_ip is a residential public IP, which most ISPs rotate
+#  periodically (confirmed dynamic here). When it changes, voice breaks
+#  silently until node_ip is updated to match and LiveKit restarts -- there
+#  is no dynamic-DNS support in LiveKit itself (node_ip must be a literal
+#  IP, not a hostname it resolves). node_ip lives in the livekit-node-ip
+#  ConfigMap below (not hardcoded in this Deployment's args) specifically so
+#  deploy/kubernetes/livekit-ip-watch.sh can patch it and roll the
+#  Deployment whenever the detected public IP changes -- see that script
+#  for how it's scheduled (cron, since this WSL distro doesn't run it by
+#  default).
+#
+# rtc.turn_servers below (Cloudflare's managed Realtime TURN service,
+# turn.cloudflare.com:443, protocol tls) is kept as a fallback candidate for
+# clients on networks that block direct UDP/TCP to arbitrary residential
+# IPs even with the above working -- it costs nothing to leave configured.
+# It is NOT sufficient on its own: LiveKit only uses turn_servers to offer
+# clients an extra option, it does not make LiveKit's own side relay
+# through TURN, so a server with zero real reachability (no forwarded
+# router port) still can't be reached even with valid TURN credentials.
+# CF_TURN_USERNAME/CF_TURN_CREDENTIAL come from wallow-secrets
+# (CLOUDFLARE_TURN_USERNAME/_CREDENTIAL), which are SHORT-LIVED (24h,
+# generated via Cloudflare's credentials/generate-ice-servers API using
+# CLOUDFLARE_TURN_KEY_ID/_API_TOKEN, also in that same secret) -- if this
+# fallback stops working, this credential has likely expired and needs
+# regenerating (see deploy/kubernetes/turn-refresh.sh once that exists;
+# until then, regenerate by hand and `kubectl patch secret wallow-secrets
+# -n wallow --type=merge --patch-file=<a small JSON file, see git history
+# of this file for the exact shape>` -- never `kubectl create secret ... |
+# kubectl apply -f -` for a partial update, it replaces the whole object
+# and drops every other key; and never inline the base64 values into a
+# quoted -p argument through a nested shell, they get silently mangled).
 #
 # Consequences of hostNetwork: true worth knowing:
 #  - Only one LiveKit pod can ever run per node (it owns the host's 7880/
@@ -60,6 +114,21 @@
 # as the alternative if hostNetwork turns out not to work in your setup --
 # it requires remapping LIVEKIT_CONFIG's rtc.tcp_port/udp_port to whatever
 # 30000-32767 ports you allocate, which is why it isn't the default here.
+# Holds just the one value that changes on its own (the home connection's
+# public IP) so deploy/kubernetes/livekit-ip-watch.sh can patch it without
+# touching the Deployment YAML -- `kubectl patch configmap` is a clean,
+# scriptable operation; rewriting node_ip inside the embedded shell heredoc
+# below on every IP change would mean sed-editing this file from a cron job,
+# which is exactly the kind of fragile text-mangling that's bitten this
+# deployment before.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: livekit-node-ip
+  namespace: wallow
+data:
+  LIVEKIT_NODE_IP: "177.96.125.211"
+---
 apiVersion: v1
 kind: Service
 metadata:
@@ -109,10 +178,6 @@ spec:
         - name: livekit
           image: livekit/livekit-server:v1.12.0
           env:
-            - name: HOST_IP
-              valueFrom:
-                fieldRef:
-                  fieldPath: status.hostIP
             - name: LIVEKIT_API_KEY
               valueFrom:
                 secretKeyRef: {name: wallow-secrets, key: LIVEKIT_API_KEY}
@@ -122,6 +187,15 @@ spec:
             - name: LIVEKIT_KEYS
               valueFrom:
                 secretKeyRef: {name: wallow-secrets, key: LIVEKIT_KEYS}
+            - name: CF_TURN_USERNAME
+              valueFrom:
+                secretKeyRef: {name: wallow-secrets, key: CLOUDFLARE_TURN_USERNAME}
+            - name: CF_TURN_CREDENTIAL
+              valueFrom:
+                secretKeyRef: {name: wallow-secrets, key: CLOUDFLARE_TURN_CREDENTIAL}
+            - name: LIVEKIT_NODE_IP
+              valueFrom:
+                configMapKeyRef: {name: livekit-node-ip, key: LIVEKIT_NODE_IP}
           command: ["sh", "-c"]
           args:
             - |
@@ -133,10 +207,16 @@ spec:
                 tcp_port: 7881
                 udp_port: 7882
                 use_external_ip: false
-                node_ip: "$HOST_IP"
+                node_ip: "$LIVEKIT_NODE_IP"
                 stun_servers:
                   - stun.l.google.com:19302
                   - stun1.l.google.com:19302
+                turn_servers:
+                  - host: turn.cloudflare.com
+                    port: 443
+                    protocol: tls
+                    username: "$CF_TURN_USERNAME"
+                    credential: "$CF_TURN_CREDENTIAL"
               webhook:
                 api_key: $LIVEKIT_API_KEY
                 urls:
@@ -144,7 +224,7 @@ spec:
               EOF
               )
               export LIVEKIT_CONFIG
-              echo "starting livekit-server with node_ip=$HOST_IP (from Downward API status.hostIP; compare against \`minikube ip\` if media doesn't connect)"
+              echo "starting livekit-server with node_ip=$LIVEKIT_NODE_IP (from the livekit-node-ip ConfigMap; deploy/kubernetes/livekit-ip-watch.sh keeps it in sync with this connection's actual public IP) -- requires the router port-forward (TCP 7881, UDP 7882 -> 192.168.15.12) and deploy/kubernetes/livekit_relay.py (WSL -> minikube bridge) both running"
               exec /livekit-server
           ports:
             - name: http

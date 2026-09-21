@@ -2,6 +2,7 @@
 
 import {Logger} from '@app/features/platform/utils/AppLogger';
 import type {ToastProps} from '@app/features/ui/toast';
+import {randomUUID} from '@app/lib/crypto/RandomUuid';
 import {makeAutoObservable, observable} from 'mobx';
 
 const logger = new Logger('Toast');
@@ -25,7 +26,7 @@ class Toast {
 	}
 
 	createToast(data: ToastProps): string {
-		const id = crypto.randomUUID();
+		const id = randomUUID();
 		logger.debug(`Creating toast: ${id}, type: ${data.type}`);
 		this.currentToast = {id, data};
 		return id;

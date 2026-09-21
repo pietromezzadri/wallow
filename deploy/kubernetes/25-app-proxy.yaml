@@ -76,19 +76,19 @@ spec:
             - name: FLUXER_APP_PROXY_PORT
               value: "8080"
             - name: FLUXER_BASE_DOMAIN
-              value: "wallow.local"
+              value: "wallow.app.br"
             - name: FLUXER_PUBLIC_SCHEME
-              value: "http"
+              value: "https"
             - name: FLUXER_PUBLIC_PORT
-              value: "80"
+              value: "443"
             - name: FLUXER_PUBLIC_ORIGIN
-              value: "http://wallow.local"
+              value: "https://wallow.app.br"
             - name: DISCOVERY_UPSTREAM_URL
               value: "http://api:8080/.well-known/fluxer"
             - name: PUBLIC_BOOTSTRAP_API_ENDPOINT
               value: "/api"
             - name: PUBLIC_BOOTSTRAP_API_PUBLIC_ENDPOINT
-              value: "http://wallow.local/api"
+              value: "https://wallow.app.br/api"
             - name: FLUXER_CSP_EXTRA_DEFAULT_SRC
               value: ""
             - name: FLUXER_CSP_EXTRA_CONNECT_SRC

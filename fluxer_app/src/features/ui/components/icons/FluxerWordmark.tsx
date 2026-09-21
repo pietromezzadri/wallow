@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import RuntimeConfig, {DEFAULT_APP_PUBLIC_CONFIG} from '@app/features/app/state/RuntimeConfig';
+import RuntimeConfig from '@app/features/app/state/RuntimeConfig';
 import {type BrandSvgProps, getDataFlx, getImageSizingProps} from '@app/features/ui/components/icons/BrandImageUtils';
 import FluxerWordmarkMonochromeAsset from '@app/media/images/fluxer-logo-wordmark-monochrome.svg?react';
 import FluxerWordmarkAsset from '@app/media/images/fluxer-wordmark.svg?react';
@@ -32,7 +32,14 @@ export const FluxerWordmark = observer(({variant = 'default', ...props}: FluxerW
 			/>
 		);
 	}
-	if (productName !== DEFAULT_APP_PUBLIC_CONFIG.branding.product_name) {
+	// Compared against the literal upstream name, not DEFAULT_APP_PUBLIC_CONFIG's
+	// product_name: that constant is this fork's own fallback ("Wallow"), used
+	// elsewhere for "what to show before runtime config loads." The bundled
+	// FluxerWordmark*Asset SVGs below still contain the original Fluxer artwork,
+	// so this check has to ask "is productName still literally Fluxer" to decide
+	// whether that bundled art is still accurate -- not "does it match our own
+	// fallback," which would always be true now and skip straight to the stale art.
+	if (productName !== 'Fluxer') {
 		const style: React.CSSProperties = {
 			...(props.style as React.CSSProperties | undefined),
 			alignItems: 'center',

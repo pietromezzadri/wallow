@@ -49,6 +49,14 @@ export const roomOptionDefaults: InternalRoomOptions = {
 export const roomConnectOptionDefaults: InternalRoomConnectOptions = {
 	autoSubscribe: true,
 	maxRetries: 1,
-	peerConnectionTimeout: 15_000,
+	// Upstream default is 15s, which is enough time when a UDP host/srflx
+	// candidate pair connects (typically sub-second). When UDP is entirely
+	// unreachable (e.g. self-hosted behind a NAT/tunnel with only an ICE-TCP
+	// fallback candidate available) the ICE agent schedules TCP connectivity
+	// checks after UDP ones, and a TCP handshake plus STUN-over-TCP framing
+	// takes noticeably longer than a UDP round trip -- 15s was consistently
+	// timing out before the TCP pair ever got attempted, not just before it
+	// succeeded. 45s gives that fallback path room to actually run.
+	peerConnectionTimeout: 45_000,
 	websocketTimeout: 15_000,
 } as const;

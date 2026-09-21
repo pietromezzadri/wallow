@@ -86,7 +86,7 @@ spec:
             - name: FLUXER_MEDIA_PROXY_STORAGE_BACKEND
               value: "s3"
             - name: FLUXER_MEDIA_PROXY_PUBLIC_ENDPOINT
-              value: "http://wallow.local/media"
+              value: "https://wallow.app.br/media"
             - name: FLUXER_S3_READ_SIGNED
               value: "true"
           readinessProbe:

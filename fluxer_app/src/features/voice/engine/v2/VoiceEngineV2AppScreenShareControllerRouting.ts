@@ -5,6 +5,7 @@ import type {VoiceEngineV2AppScreenShareExecutionAdapter} from '@app/features/vo
 import {logger} from '@app/features/voice/engine/voice_screen_share_manager/shared';
 import LocalVoiceState from '@app/features/voice/state/LocalVoiceState';
 import {recordScreenShareStopped} from '@app/features/voice/utils/ScreenShareLifecycleLog';
+import {randomUUID} from '@app/lib/crypto/RandomUuid';
 import type {VoiceEngineV2ScreenOptions} from '@fluxer/voice_engine_v2';
 import type {Room, ScreenShareCaptureOptions, TrackPublishOptions, VideoCodec} from 'livekit-client';
 
@@ -87,12 +88,8 @@ interface PendingScreenShareStopRequest {
 }
 
 function createScreenShareCaptureId(): string {
-	const cryptoPort = globalThis.crypto;
-	if (!cryptoPort || typeof cryptoPort.randomUUID !== 'function') {
-		throw new Error('Screen-share capture ID generation requires crypto.randomUUID');
-	}
-	const captureId = cryptoPort.randomUUID();
-	assert.ok(captureId.length > 0, 'crypto.randomUUID must return a non-empty capture ID');
+	const captureId = randomUUID();
+	assert.ok(captureId.length > 0, 'randomUUID must return a non-empty capture ID');
 	return captureId;
 }
 

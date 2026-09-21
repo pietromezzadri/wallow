@@ -88,9 +88,9 @@ spec:
             - name: FLUXER_SVC_MODE
               value: "router"
             - name: FLUXER_MEDIA_PROXY_PUBLIC_ENDPOINT
-              value: "http://wallow.local/media"
+              value: "https://wallow.app.br/media"
             - name: FLUXER_STATIC_CDN_ENDPOINT
-              value: "http://wallow.local"
+              value: "https://wallow.app.br"
           readinessProbe:
             httpGet: {path: /_health, port: 8090}
             initialDelaySeconds: 15
@@ -167,9 +167,9 @@ spec:
             - name: FLUXER_SVC_SHARD_ID
               value: "0"
             - name: FLUXER_MEDIA_PROXY_PUBLIC_ENDPOINT
-              value: "http://wallow.local/media"
+              value: "https://wallow.app.br/media"
             - name: FLUXER_STATIC_CDN_ENDPOINT
-              value: "http://wallow.local"
+              value: "https://wallow.app.br"
           readinessProbe:
             httpGet: {path: /_health, port: 8090}
             initialDelaySeconds: 15

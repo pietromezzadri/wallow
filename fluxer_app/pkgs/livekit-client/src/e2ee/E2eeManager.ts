@@ -15,6 +15,7 @@ import type RemoteTrack from '../room/track/RemoteTrack.ts';
 import type {Track} from '../room/track/Track.ts';
 import {mimeTypeToVideoCodecString} from '../room/track/utils.ts';
 import {Future, isChromiumBased, isLocalTrack, isSafariBased, isVideoTrack} from '../room/utils.ts';
+import {randomUUID} from '../utils/randomUUID.ts';
 import {E2EE_FLAG} from './constants.ts';
 import {type E2EEManagerCallbacks, EncryptionEvent, KeyProviderEvent} from './events.ts';
 import type {BaseKeyProvider} from './KeyProvider.ts';
@@ -308,7 +309,7 @@ export class E2EEManager
 		if (!this.worker) {
 			throw Error('could not encrypt data, worker is missing');
 		}
-		const uuid = crypto.randomUUID();
+		const uuid = randomUUID();
 		const msg: EncryptDataRequestMessage = {
 			kind: 'encryptDataRequest',
 			data: {
@@ -330,7 +331,7 @@ export class E2EEManager
 		if (!this.worker) {
 			throw Error('could not handle encrypted data, worker is missing');
 		}
-		const uuid = crypto.randomUUID();
+		const uuid = randomUUID();
 		const msg: DecryptDataRequestMessage = {
 			kind: 'decryptDataRequest',
 			data: {

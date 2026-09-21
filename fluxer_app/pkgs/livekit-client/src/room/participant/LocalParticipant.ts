@@ -94,6 +94,7 @@ import {
 	sleep,
 	supportsVideoCodec,
 } from '../utils.ts';
+import {randomUUID} from '../../utils/randomUUID.ts';
 import Participant from './Participant.ts';
 import type {ParticipantTrackPermission} from './ParticipantTrackPermission.ts';
 import {trackPermissionToProto} from './ParticipantTrackPermission.ts';
@@ -1503,7 +1504,7 @@ export default class LocalParticipant extends Participant {
 
 	async sendChatMessage(text: string, options?: SendTextOptions): Promise<ChatMessage> {
 		const msg = {
-			id: crypto.randomUUID(),
+			id: randomUUID(),
 			message: text,
 			timestamp: Date.now(),
 			attachedFiles: options?.attachments,
@@ -1584,7 +1585,7 @@ export default class LocalParticipant extends Participant {
 			}
 
 			const effectiveTimeout = Math.max(responseTimeout, minEffectiveTimeout);
-			const id = crypto.randomUUID();
+			const id = randomUUID();
 			await this.publishRpcRequest(destinationIdentity, id, method, payload, effectiveTimeout);
 
 			const ackTimeoutId = setTimeout(() => {

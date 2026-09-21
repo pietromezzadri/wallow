@@ -7,6 +7,7 @@ import {Logger} from '@app/features/platform/utils/AppLogger';
 import Relationships from '@app/features/relationship/state/Relationships';
 import type {User} from '@app/features/user/models/User';
 import Users from '@app/features/user/state/Users';
+import {randomUUID} from '@app/lib/crypto/RandomUuid';
 import {RelationshipTypes} from '@fluxer/constants/src/UserConstants';
 import {makeAutoObservable} from 'mobx';
 
@@ -171,7 +172,7 @@ export class SearchContext {
 	private _attachedWorker: Worker | null = null;
 
 	constructor(callback: (results: Array<TransformedMember>) => void, limit: number = DEFAULT_LIMIT) {
-		this._contextId = crypto.randomUUID();
+		this._contextId = randomUUID();
 		this._deliverResults = callback;
 		this._maxResults = limit;
 		this._inFlightQuery = null;

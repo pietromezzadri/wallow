@@ -48,7 +48,7 @@ spec:
   ingressClassName: nginx
   rules:
     - host: wallow.local
-      http:
+      http: &wallow_paths
         paths:
           # bare /gateway -> gateway:8080 at "/" (Caddyfile: handle /gateway { rewrite * / })
           - path: /gateway
@@ -142,6 +142,13 @@ spec:
                 name: app-proxy
                 port:
                   number: 8080
+    # Same paths, served for the public Cloudflare Tunnel hostname too --
+    # ingress-nginx merges every `rules` entry (even across separate Ingress
+    # objects) into one server block per host, so a second `host:` entry
+    # reusing the same &wallow_paths anchor is the standard way to answer
+    # both hostnames without duplicating the whole path list.
+    - host: wallow.app.br
+      http: *wallow_paths
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
@@ -159,7 +166,7 @@ spec:
   ingressClassName: nginx
   rules:
     - host: wallow.local
-      http:
+      http: &wallow_stripped_paths
         paths:
           # /api/* -> api:8080, prefix stripped (Caddyfile: handle_path /api/*)
           - path: /api(/|$)(.*)
@@ -205,3 +212,5 @@ spec:
                 name: admin
                 port:
                   number: 8080
+    - host: wallow.app.br
+      http: *wallow_stripped_paths

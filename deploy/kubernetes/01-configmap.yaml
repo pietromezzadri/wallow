@@ -13,9 +13,15 @@
 # traffic, the short form is simply easier to read. Ports are unchanged from
 # compose since nothing else about the topology changes.
 #
-# FLUXER_BASE_DOMAIN / FLUXER_PUBLIC_ORIGIN etc. point at http://wallow.local,
-# the Ingress host this deployment answers on (see 40-ingress.yaml). Add
-# "<minikube ip>  wallow.local" to /etc/hosts (or your resolver) to reach it.
+# FLUXER_BASE_DOMAIN / FLUXER_PUBLIC_ORIGIN etc. point at the public
+# Cloudflare Tunnel hostname, https://wallow.app.br (see 40-ingress.yaml,
+# which answers both that host and wallow.local for local-only access).
+# The origin-facing hop (cloudflared -> ingress-nginx) is plain HTTP --
+# Cloudflare terminates TLS at its own edge and the tunnel itself is
+# already encrypted, so nothing else in this cluster needs a certificate.
+# FLUXER_PUBLIC_SCHEME is "https" regardless, since that's what every
+# browser and every generated absolute URL (redirects, webhooks, passkey
+# origins) needs to say, even though the bytes arrive here over plain HTTP.
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -37,10 +43,10 @@ data:
   NODE_ENV: "production"
   LOG_LEVEL: "info"
   FLUXER_SELF_HOSTED: "true"
-  FLUXER_BASE_DOMAIN: "wallow.local"
-  FLUXER_PUBLIC_SCHEME: "http"
-  FLUXER_PUBLIC_PORT: "80"
-  FLUXER_PUBLIC_ORIGIN: "http://wallow.local"
+  FLUXER_BASE_DOMAIN: "wallow.app.br"
+  FLUXER_PUBLIC_SCHEME: "https"
+  FLUXER_PUBLIC_PORT: "443"
+  FLUXER_PUBLIC_ORIGIN: "https://wallow.app.br"
   # Must stay "true": fluxer_api's RequireClientIpMiddleware has no fallback
   # to the raw socket peer address -- when trust_client_ip_header is false,
   # client-IP resolution always returns null (see
@@ -86,14 +92,14 @@ data:
   FLUXER_LIVEKIT_INTERNAL_URL: "http://livekit:7880"
   FLUXER_LIVEKIT_WEBHOOK_URL: "http://api:8080/webhooks/livekit"
   FLUXER_LIVEKIT_DEFAULT_REGION: '{"id":"default","name":"Default","emoji":"🌍","latitude":0,"longitude":0}'
-  FLUXER_LIVEKIT_URL: "http://wallow.local/livekit"
+  FLUXER_LIVEKIT_URL: "https://wallow.app.br/livekit"
 
   FLUXER_KLIPY_API_KEY: ""
 
   # --- Email (disabled by default, matches .env.example) ---
   FLUXER_EMAIL_ENABLED: "false"
   FLUXER_EMAIL_PROVIDER: "none"
-  FLUXER_EMAIL_FROM_EMAIL: "noreply@wallow.local"
+  FLUXER_EMAIL_FROM_EMAIL: "noreply@wallow.app.br"
   FLUXER_EMAIL_FROM_NAME: "Fluxer"
   FLUXER_EMAIL_APP_BASE_URL: ""
   FLUXER_EMAIL_SMTP_HOST: ""
@@ -117,16 +123,16 @@ data:
 
   # --- Auth / crypto knobs that are not themselves secret values ---
   FLUXER_SSO_ALLOW_PRIVATE_ADDRESSES: "false"
-  FLUXER_VAPID_EMAIL: "admin@wallow.local"
-  FLUXER_PASSKEY_RP_ID: "wallow.local"
+  FLUXER_VAPID_EMAIL: "admin@wallow.app.br"
+  FLUXER_PASSKEY_RP_ID: "wallow.app.br"
   FLUXER_PASSKEY_RP_NAME: "Fluxer"
-  FLUXER_PASSKEY_ADDITIONAL_ALLOWED_ORIGINS: "http://wallow.local"
+  FLUXER_PASSKEY_ADDITIONAL_ALLOWED_ORIGINS: "https://wallow.app.br"
 
   # --- Internal service-to-service endpoints ---
   FLUXER_INTERNAL_API_ENDPOINT: "http://api:8080"
   FLUXER_INTERNAL_GATEWAY_ENDPOINT: "http://gateway:8080"
   FLUXER_INTERNAL_MEDIA_PROXY_ENDPOINT: "http://media-proxy:8080"
-  FLUXER_MARKETING_ENDPOINT: "http://wallow.local"
+  FLUXER_MARKETING_ENDPOINT: "https://wallow.app.br"
   FLUXER_MEDIA_PROXY_ENDPOINT: "http://media-proxy:8080"
-  FLUXER_MEDIA_ENDPOINT: "http://wallow.local/media"
-  FLUXER_MEDIA_PROXY_UPLOAD_RELAY_ENDPOINT: "http://wallow.local/media"
+  FLUXER_MEDIA_ENDPOINT: "https://wallow.app.br/media"
+  FLUXER_MEDIA_PROXY_UPLOAD_RELAY_ENDPOINT: "https://wallow.app.br/media"

@@ -25,6 +25,7 @@ import type {
 	TextStreamInfo,
 } from '../../types.ts';
 import {numberToBigInt, splitUtf8} from '../../utils.ts';
+import {randomUUID} from '../../../utils/randomUUID.ts';
 import {ByteStreamWriter, TextStreamWriter} from './StreamWriter.ts';
 
 const STREAM_CHUNK_SIZE = 15_000;
@@ -44,11 +45,11 @@ export default class OutgoingDataStreamManager {
 	}
 
 	async sendText(text: string, options?: SendTextOptions): Promise<TextStreamInfo> {
-		const streamId = crypto.randomUUID();
+		const streamId = randomUUID();
 		const textInBytes = new TextEncoder().encode(text);
 		const totalTextLength = textInBytes.byteLength;
 
-		const fileIds = options?.attachments?.map(() => crypto.randomUUID());
+		const fileIds = options?.attachments?.map(() => randomUUID());
 
 		const progresses = new Array<number>(fileIds ? fileIds.length + 1 : 1).fill(0);
 
@@ -89,7 +90,7 @@ export default class OutgoingDataStreamManager {
 	}
 
 	async streamText(options?: StreamTextOptions): Promise<TextStreamWriter> {
-		const streamId = options?.streamId ?? crypto.randomUUID();
+		const streamId = options?.streamId ?? randomUUID();
 
 		const info: TextStreamInfo = {
 			id: streamId,
@@ -183,7 +184,7 @@ export default class OutgoingDataStreamManager {
 	}
 
 	async sendFile(file: File, options?: SendFileOptions): Promise<{id: string}> {
-		const streamId = crypto.randomUUID();
+		const streamId = randomUUID();
 		await this._sendFile(streamId, file, options);
 		return {id: streamId};
 	}
@@ -210,7 +211,7 @@ export default class OutgoingDataStreamManager {
 	}
 
 	async streamBytes(options?: StreamBytesOptions) {
-		const streamId = options?.streamId ?? crypto.randomUUID();
+		const streamId = options?.streamId ?? randomUUID();
 		const destinationIdentities = options?.destinationIdentities;
 
 		const info: ByteStreamInfo = {

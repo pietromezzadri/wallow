@@ -76,15 +76,15 @@ spec:
             - name: FLUXER_API_ENDPOINT
               value: "http://api:8080"
             - name: FLUXER_ADMIN_ENDPOINT
-              value: "http://wallow.local/admin"
+              value: "https://wallow.app.br/admin"
             - name: FLUXER_APP_ENDPOINT
-              value: "http://wallow.local"
+              value: "https://wallow.app.br"
             - name: FLUXER_MEDIA_ENDPOINT
-              value: "http://wallow.local/media"
+              value: "https://wallow.app.br/media"
             - name: FLUXER_STATIC_CDN_ENDPOINT
-              value: "http://wallow.local"
+              value: "https://wallow.app.br"
             - name: FLUXER_ADMIN_OAUTH_REDIRECT_URI
-              value: "http://wallow.local/admin/oauth2_callback"
+              value: "https://wallow.app.br/admin/oauth2_callback"
           readinessProbe:
             httpGet:
               path: /_health

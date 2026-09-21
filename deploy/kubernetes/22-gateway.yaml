@@ -80,9 +80,9 @@ spec:
             - name: FLUXER_GATEWAY_PORT
               value: "8080"
             - name: FLUXER_GATEWAY_MEDIA_PROXY_ENDPOINT
-              value: "http://wallow.local/media"
+              value: "https://wallow.app.br/media"
             - name: FLUXER_GATEWAY_STATIC_CDN_ENDPOINT
-              value: "http://wallow.local"
+              value: "https://wallow.app.br"
             - name: FLUXER_GATEWAY_LOGGER_LEVEL
               value: "info"
             - name: FLUXER_ERLANG_SCHEDULERS_MIN

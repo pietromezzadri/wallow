@@ -20,6 +20,7 @@ import {$isSlashSlotNode, type SlashSlotNode} from '@app/features/lexical/compos
 import {COMPOSER_SLASH_SLOT_STATE_MAX_ID_LENGTH} from '@app/features/lexical/composer/SlashSlotPersistence';
 import {ParserFlags} from '@app/features/messaging/utils/markdown/parser/Enums';
 import type {MentionSegment} from '@app/features/messaging/utils/TextareaSegmentManager';
+import {randomUUID} from '@app/lib/crypto/RandomUuid';
 import {mergeRegister} from '@lexical/utils';
 import {
 	$addUpdateTag,
@@ -239,7 +240,7 @@ function mintTrustedPayload(slice: ComposerClipboardSlice): {token: string; seri
 	if (validated == null) {
 		return null;
 	}
-	const token = globalThis.crypto.randomUUID();
+	const token = randomUUID();
 	const payload: SerializedComposerClipboardPayload = {
 		version: COMPOSER_CLIPBOARD_VERSION,
 		token,
