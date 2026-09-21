@@ -1,9 +1,9 @@
 {
 	"name": "fluxer_desktop",
-	"version": "0.0.0",
+	"version": "1.0.0",
 	"description": "Instant messaging and VoIP application",
-	"homepage": "https://fluxer.app",
-	"author": "Fluxer Platform AB <support@fluxer.app>",
+	"homepage": "https://wallow.app.br",
+	"author": "Wallow <support@wallow.app.br>",
 	"license": "AGPL-3.0-or-later",
 	"private": true,
 	"type": "module",
