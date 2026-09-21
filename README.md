@@ -13,7 +13,7 @@
 
 # Wallow
 
-Wallow is a free and open source instant messaging and VoIP chat app built for friends, groups, and communities — a capybara-branded, personally self-hosted fork of [Fluxer](https://fluxer.app).
+Wallow is a free and open source instant messaging and VoIP chat app built for friends, groups, and communities, personally self-hosted fork of [Fluxer](https://fluxer.app).
 
 This is a personal instance running at [wallow.app.br](https://wallow.app.br), self-hosted on Kubernetes. The upstream project's own docs at [docs.fluxer.app](https://docs.fluxer.app) still apply to the underlying platform (features, self-hosting guides, API reference); this fork's own deployment-specific notes live under [`deploy/`](./deploy).
 
